@@ -387,7 +387,7 @@ async def _seed_demo_content():
             "summary": "Rupert Sheldrake ha proposto l'esistenza di campi morfogenetici, strutture informazionali non locali che guidano lo sviluppo di ogni forma vivente. Questi campi contengono la memoria della specie e si aggiornano con l'esperienza collettiva. Applicato alla salute umana, questo modello spiega la trasmissione trans-generazionale di traumi e abilità. La natura ricorda, e noi siamo parte di questa memoria vivente.",
             "category": "Fisica quantistica",
             "source_url": "https://www.scienzebiofisiche.it/",
-            "image_url": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
+            "image_url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800",
         },
         {
             "title": "Yoga e le otto membra di Patanjali",
@@ -468,7 +468,7 @@ async def _seed_demo_content():
             "category": "Meditazione",
             "kind": "meditation",
             "media_url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
-            "thumbnail_url": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
+            "thumbnail_url": "https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800",
             "duration_sec": 1500,
             "is_premium": True,
         },
