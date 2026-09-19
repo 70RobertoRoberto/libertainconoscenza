@@ -166,11 +166,27 @@ export default function ArticleDetail() {
       <View style={[styles.shareBar, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable testID="share-wa" onPress={shareWA} style={[styles.shareBtn, { backgroundColor: "#25D366" }]}>
           <FontAwesome6 name="whatsapp" iconStyle="brand" size={18} color="#FFFFFF" />
-          <Text style={styles.shareTxt} allowFontScaling={false} accessibilityLanguage="en">WhatsApp</Text>
+          <Text
+            style={styles.shareTxt}
+            allowFontScaling={false}
+            accessibilityLanguage="en"
+            // @ts-ignore RN Web only – prevents Google/Chrome auto-translate
+            dataSet={{ notranslate: "true" }}
+          >
+            {"Whats\u2060App"}
+          </Text>
         </Pressable>
         <Pressable testID="share-tg" onPress={shareTG} style={[styles.shareBtn, { backgroundColor: "#229ED9" }]}>
           <FontAwesome6 name="telegram" iconStyle="brand" size={18} color="#FFFFFF" />
-          <Text style={styles.shareTxt} allowFontScaling={false} accessibilityLanguage="en">Telegram</Text>
+          <Text
+            style={styles.shareTxt}
+            allowFontScaling={false}
+            accessibilityLanguage="en"
+            // @ts-ignore RN Web only – prevents Google/Chrome auto-translate
+            dataSet={{ notranslate: "true" }}
+          >
+            {"Tele\u2060gram"}
+          </Text>
         </Pressable>
       </View>
     </View>

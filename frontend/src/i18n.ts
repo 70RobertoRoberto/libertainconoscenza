@@ -9,6 +9,8 @@ const LANG_KEY = "ca_lang";
 
 const listeners = new Set<(l: Lang) => void>();
 let currentLang: Lang = "it";
+let initialized = false;
+let initPromise: Promise<void> | null = null;
 
 async function getStored(): Promise<Lang | null> {
   try {
@@ -19,26 +21,45 @@ async function getStored(): Promise<Lang | null> {
   }
 }
 
-export async function initLang() {
-  const s = await getStored();
-  if (s === "it" || s === "en") currentLang = s;
-  listeners.forEach((f) => f(currentLang));
+// Runs only once for the whole app lifetime.
+export async function initLang(): Promise<void> {
+  if (initialized) return;
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    const s = await getStored();
+    if (s === "it" || s === "en") currentLang = s;
+    initialized = true;
+    listeners.forEach((f) => f(currentLang));
+  })();
+  return initPromise;
 }
 
 export async function setLang(l: Lang) {
+  // Mark as initialised immediately so a late initLang() cannot overwrite the user choice.
+  initialized = true;
   currentLang = l;
-  if (Platform.OS === "web") {
-    try { window.localStorage.setItem(LANG_KEY, l); } catch {}
-  } else {
-    await SecureStore.setItemAsync(LANG_KEY, l);
-  }
+  // Notify listeners synchronously so UI updates instantly.
   listeners.forEach((f) => f(l));
+  // Persist to storage (fire and forget, but await for callers that want to know when it's persisted).
+  try {
+    if (Platform.OS === "web") {
+      window.localStorage.setItem(LANG_KEY, l);
+    } else {
+      await SecureStore.setItemAsync(LANG_KEY, l);
+    }
+  } catch {}
 }
 
 export function useLang() {
   const [lang, setStateLang] = useState<Lang>(currentLang);
   useEffect(() => {
-    initLang().then(() => setStateLang(currentLang));
+    // Only actually reads storage once for the whole app.
+    if (!initialized) {
+      initLang().then(() => setStateLang(currentLang));
+    } else {
+      // Ensure local state matches global if it drifted before mount.
+      setStateLang(currentLang);
+    }
     const cb = (l: Lang) => setStateLang(l);
     listeners.add(cb);
     return () => { listeners.delete(cb); };

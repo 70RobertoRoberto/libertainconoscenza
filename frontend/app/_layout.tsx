@@ -7,8 +7,25 @@ import { AdOverlay } from "@/src/AdOverlay";
 import * as Notifications from "expo-notifications";
 import * as Linking from "expo-linking";
 import { useEffect } from "react";
+import { initLang } from "@/src/i18n";
 
 LogBox.ignoreAllLogs(true);
+
+// Module-scope: disable browser auto-translation on the web preview so that
+// brand names like WhatsApp / Telegram and the user-selected language don't get
+// silently rewritten by Google Chrome / Safari page translators.
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  try {
+    document.documentElement.setAttribute("translate", "no");
+    document.documentElement.classList.add("notranslate");
+    if (!document.querySelector('meta[name="google"][content="notranslate"]')) {
+      const meta = document.createElement("meta");
+      meta.setAttribute("name", "google");
+      meta.setAttribute("content", "notranslate");
+      document.head.appendChild(meta);
+    }
+  } catch {}
+}
 
 // Module-scope: foreground handler (guarded from web)
 if (Platform.OS !== "web") {
@@ -40,6 +57,11 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const router = useRouter();
+
+  // Kick off language init exactly once at app boot.
+  useEffect(() => {
+    initLang();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS === "web") return;
