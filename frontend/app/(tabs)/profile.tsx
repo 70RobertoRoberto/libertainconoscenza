@@ -82,6 +82,12 @@ export default function Profile() {
         </Card>
       )}
 
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>♥  Preferiti</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton testID="go-favorites" label="Vedi i miei preferiti" onPress={() => router.push("/favorites")} />
+      </Card>
+
       <View style={{ marginTop: spacing.lg }}>
         <OutlineButton testID="logout-btn" label={t("logout")} onPress={logout} />
       </View>

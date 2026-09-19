@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -21,12 +21,28 @@ export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [fav, setFav] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["media", id],
     queryFn: () => api<any>(`/media/${id}`),
     enabled: !!id,
   });
+
+  useEffect(() => {
+    if (!id) return;
+    api<any>("/favorites").then((r) => setFav((r.ids || []).includes(id as string))).catch(() => {});
+  }, [id]);
+
+  const toggleFav = async () => {
+    try {
+      const r = await api<any>("/favorites/toggle", {
+        method: "POST",
+        body: JSON.stringify({ content_id: id, content_type: "media" }),
+      });
+      setFav(!!r.favorited);
+    } catch {}
+  };
 
   if (isLoading) {
     return (
@@ -56,7 +72,10 @@ export default function MediaDetail() {
 
   if (!data) return null;
 
-  const openMedia = () => Linking.openURL(data.media_url);
+  const isRelativeMedia = data.media_url && data.media_url.startsWith("/api/");
+  const backendBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+  const fullUrl = isRelativeMedia ? backendBase + data.media_url : data.media_url;
+  const openMedia = () => Linking.openURL(fullUrl);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -72,6 +91,15 @@ export default function MediaDetail() {
             style={[styles.back, { top: insets.top + spacing.md }]}
           >
             <Text style={{ color: colors.onSurface, fontSize: 22 }}>‹</Text>
+          </Pressable>
+          <Pressable
+            testID="fav-btn"
+            onPress={toggleFav}
+            style={[styles.favBtn, { top: insets.top + spacing.md }]}
+          >
+            <Text style={{ fontSize: 20, color: fav ? colors.brandPrimary : colors.onSurface }}>
+              {fav ? "♥" : "♡"}
+            </Text>
           </Pressable>
         </View>
         <View style={{ padding: spacing.xl }}>
@@ -102,6 +130,16 @@ const styles = StyleSheet.create({
   back: {
     position: "absolute",
     left: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(10,15,13,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  favBtn: {
+    position: "absolute",
+    right: spacing.lg,
     width: 40,
     height: 40,
     borderRadius: 20,

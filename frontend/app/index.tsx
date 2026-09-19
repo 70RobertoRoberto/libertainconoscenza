@@ -4,6 +4,7 @@ import { Redirect } from "expo-router";
 import { auth } from "@/src/api";
 import { colors } from "@/src/theme";
 import { LOGO_URL } from "@/src/assets";
+import { registerForPush } from "@/src/push";
 
 export default function Index() {
   const [state, setState] = useState<"loading" | "auth" | "app">("loading");
@@ -12,7 +13,8 @@ export default function Index() {
     (async () => {
       if (!(await auth.hasToken())) return setState("auth");
       try {
-        await auth.me();
+        const user = await auth.me();
+        registerForPush(user.id).catch(() => {});
         setState("app");
       } catch {
         await auth.logout();

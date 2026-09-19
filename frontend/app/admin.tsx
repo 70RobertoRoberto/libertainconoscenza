@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, OutlineButton, Muted, Card } from "@/src/ui";
@@ -23,7 +24,7 @@ const CATEGORIES = [
   "Filosofia", "Nutrizione", "Somatognostica", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "messages" | "users" | "orders";
+type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "messages" | "users" | "orders";
 
 export default function Admin() {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function Admin() {
     { key: "media", label: "Video/Med." },
     { key: "youtube", label: "YouTube" },
     { key: "ads", label: "Pubblicità" },
+    { key: "coupons", label: "Sconti" },
     { key: "messages", label: "Messaggi" },
     { key: "users", label: "Utenti" },
     { key: "orders", label: "Ordini" },
@@ -80,6 +82,7 @@ export default function Admin() {
         {section === "media" && <MediaSection />}
         {section === "youtube" && <YoutubeSection />}
         {section === "ads" && <AdsSection />}
+        {section === "coupons" && <CouponsSection />}
         {section === "messages" && <MessagesSection />}
         {section === "users" && <UsersSection />}
         {section === "orders" && <OrdersSection />}
@@ -321,6 +324,47 @@ function MediaSection() {
     finally { setLoading(false); }
   };
 
+  const pickAndUpload = async () => {
+    setMsg("");
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({
+        type: kind === "meditation" ? "audio/*" : "video/*",
+        copyToCacheDirectory: true,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset = pick.assets[0];
+      setLoading(true);
+      const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const form = new FormData();
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, asset.name || "file");
+      } else {
+        form.append("file", { uri: asset.uri, name: asset.name || "file", type: asset.mimeType || (kind === "meditation" ? "audio/mpeg" : "video/mp4") } as any);
+      }
+      // Direct fetch (multipart) — do NOT set Content-Type manually
+      const { setToken } = await import("@/src/api");
+      // Get token
+      const authHelper = await import("@/src/api");
+      const hasT = await authHelper.auth.hasToken();
+      if (!hasT) throw new Error("Non autenticato");
+      const token = await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null) || (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      const res = await fetch(`${backend}/api/admin/upload`, {
+        method: "POST",
+        body: form as any,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const j = await res.json();
+      setUrl(j.url);
+      setMsg(`File caricato: ${asset.name} (${Math.round(j.size / 1024)} KB). Ora compila i campi e salva.`);
+    } catch (e: any) {
+      setMsg(`Errore upload: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const remove = async (id: string) => {
     await api(`/admin/media/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["admin-media"] });
@@ -338,7 +382,8 @@ function MediaSection() {
           </Pressable>
         </View>
         <TextInput testID="media-title" value={title} onChangeText={setTitle} placeholder="Titolo" placeholderTextColor={colors.muted} style={styles.input} />
-        <TextInput testID="media-url" value={url} onChangeText={setUrl} placeholder="URL video/audio (YouTube, mp3, mp4)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
+        <TextInput testID="media-url" value={url} onChangeText={setUrl} placeholder="URL video/audio (YouTube, mp3, mp4) o carica file" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
+        <OutlineButton testID="upload-file" label={`↑  Carica file ${kind === "meditation" ? "audio" : "video"}`} onPress={pickAndUpload} style={{ marginTop: spacing.sm }} />
         <TextInput value={thumb} onChangeText={setThumb} placeholder="URL immagine anteprima (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
         <TextInput value={desc} onChangeText={setDesc} placeholder="Descrizione" placeholderTextColor={colors.muted} multiline style={[styles.input, { marginTop: spacing.md, minHeight: 80, textAlignVertical: "top" }]} />
         <TextInput value={duration} onChangeText={setDuration} placeholder="Durata in minuti" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
@@ -496,6 +541,77 @@ function AdsSection() {
             </Text>
           </Pressable>
           <Pressable onPress={() => remove(a.id)}>
+            <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
+          </Pressable>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/* ─────── Coupons ─────── */
+function CouponsSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["admin-coupons"], queryFn: () => api<any>("/admin/coupons") });
+  const [code, setCode] = useState("");
+  const [percent, setPercent] = useState("20");
+  const [maxUses, setMaxUses] = useState("100");
+  const [expires, setExpires] = useState("");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const create = async () => {
+    setLoading(true); setMsg("");
+    try {
+      if (!code) throw new Error("Codice richiesto");
+      await api("/admin/coupons", {
+        method: "POST",
+        body: JSON.stringify({
+          code: code.toUpperCase(),
+          percent_off: parseInt(percent) || 10,
+          max_uses: parseInt(maxUses) || 100,
+          expires_at: expires || null,
+        }),
+      });
+      setCode(""); setPercent("20"); setMaxUses("100"); setExpires("");
+      qc.invalidateQueries({ queryKey: ["admin-coupons"] });
+      setMsg("Codice creato");
+    } catch (e: any) { setMsg(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const remove = async (c: string) => {
+    await api(`/admin/coupons/${c}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["admin-coupons"] });
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <Card>
+        <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "700" }}>Nuovo codice sconto</Text>
+        <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+          Gli utenti applicheranno il codice al checkout dell'abbonamento.
+        </Muted>
+        <TextInput testID="coupon-code" value={code} onChangeText={setCode} placeholder="LANCIO2026" placeholderTextColor={colors.muted} autoCapitalize="characters" style={styles.input} />
+        <TextInput testID="coupon-percent" value={percent} onChangeText={setPercent} placeholder="% di sconto (1-100)" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
+        <TextInput testID="coupon-max" value={maxUses} onChangeText={setMaxUses} placeholder="Numero massimo di usi" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
+        <TextInput value={expires} onChangeText={setExpires} placeholder="Scadenza YYYY-MM-DD (facoltativo)" placeholderTextColor={colors.muted} autoCapitalize="none" style={[styles.input, { marginTop: spacing.md }]} />
+        {msg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>{msg}</Text> : null}
+        <GoldButton testID="save-coupon" label="Crea codice" onPress={create} loading={loading} style={{ marginTop: spacing.md }} />
+      </Card>
+
+      <Text style={styles.section}>Codici attivi</Text>
+      {(data?.items || []).length === 0 && <Muted>Nessun codice sconto</Muted>}
+      {(data?.items || []).map((c: any) => (
+        <View key={c.code} style={styles.itemRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemTitle}>{c.code} · -{c.percent_off}%</Text>
+            <Muted style={{ fontSize: 11 }}>
+              Usato {c.used_count}/{c.max_uses}{c.expires_at ? ` · scade ${c.expires_at}` : ""}
+            </Muted>
+          </View>
+          <Pressable onPress={() => remove(c.code)}>
             <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
           </Pressable>
         </View>

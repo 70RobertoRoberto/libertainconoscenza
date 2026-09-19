@@ -17,6 +17,7 @@ import { auth } from "@/src/api";
 import { GoldButton, H1, Muted, Body } from "@/src/ui";
 import { LOGO_URL } from "@/src/assets";
 import { useLang } from "@/src/i18n";
+import { registerForPush } from "@/src/push";
 
 export default function Register() {
   const router = useRouter();
@@ -34,7 +35,8 @@ export default function Register() {
     if (password.length < 6) return setErr(t("err_min"));
     setLoading(true);
     try {
-      await auth.register(phone.trim(), password, name.trim() || undefined);
+      const user = await auth.register(phone.trim(), password, name.trim() || undefined);
+      registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
       setErr(e.message || "Errore in registrazione");

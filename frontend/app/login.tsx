@@ -17,6 +17,7 @@ import { auth } from "@/src/api";
 import { GoldButton, H1, Muted, Body } from "@/src/ui";
 import { LOGO_URL } from "@/src/assets";
 import { useLang } from "@/src/i18n";
+import { registerForPush } from "@/src/push";
 
 export default function Login() {
   const router = useRouter();
@@ -32,7 +33,8 @@ export default function Login() {
     if (!phone || !password) return setErr(t("err_creds"));
     setLoading(true);
     try {
-      await auth.login(phone.trim(), password);
+      const user = await auth.login(phone.trim(), password);
+      registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
       setErr(e.message || "Errore di accesso");

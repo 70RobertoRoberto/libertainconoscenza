@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
@@ -15,6 +15,9 @@ export default function Paywall() {
   const [selected, setSelected] = useState("12m");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [coupon, setCoupon] = useState("");
+  const [couponInfo, setCouponInfo] = useState<{ code: string; percent_off: number } | null>(null);
+  const [couponErr, setCouponErr] = useState("");
 
   useEffect(() => {
     api<{ plans: Record<string, any> }>("/plans").then((r) => {
@@ -29,13 +32,28 @@ export default function Paywall() {
     try {
       const r = await api<any>("/billing/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: selected }),
+        body: JSON.stringify({ plan: selected, coupon_code: couponInfo?.code }),
       });
       setMsg(r.message || "Ordine registrato. Attendi l'attivazione.");
     } catch (e: any) {
       setMsg(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const applyCoupon = async () => {
+    setCouponErr("");
+    if (!coupon.trim()) return;
+    try {
+      const r = await api<any>("/coupons/validate", {
+        method: "POST",
+        body: JSON.stringify({ code: coupon.trim() }),
+      });
+      setCouponInfo({ code: r.code, percent_off: r.percent_off });
+    } catch (e: any) {
+      setCouponInfo(null);
+      setCouponErr(e.message);
     }
   };
 
@@ -65,6 +83,7 @@ export default function Paywall() {
           {plans.map((p) => {
             const active = p.key === selected;
             const best = p.key === "12m";
+            const discounted = couponInfo ? Math.round(p.price_eur * (100 - couponInfo.percent_off) / 100) : p.price_eur;
             return (
               <Pressable
                 key={p.key}
@@ -85,10 +104,42 @@ export default function Paywall() {
                     {p.months === 12 ? "solo €75/mese" : `€${(p.price_eur / p.months).toFixed(0)}/mese`}
                   </Muted>
                 </View>
-                <Text style={styles.price}>€{p.price_eur}</Text>
+                <View style={{ alignItems: "flex-end" }}>
+                  {couponInfo ? (
+                    <Text style={styles.oldPrice}>€{p.price_eur}</Text>
+                  ) : null}
+                  <Text style={styles.price}>€{discounted}</Text>
+                </View>
               </Pressable>
             );
           })}
+        </View>
+
+        <View style={{ marginTop: spacing.xl }}>
+          <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, marginBottom: spacing.sm }}>
+            Hai un codice sconto?
+          </Text>
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <TextInput
+              testID="coupon-input"
+              value={coupon}
+              onChangeText={setCoupon}
+              placeholder="CODICE"
+              placeholderTextColor={colors.muted}
+              autoCapitalize="characters"
+              style={styles.coupon}
+            />
+            <Pressable testID="apply-coupon" onPress={applyCoupon} style={styles.applyBtn}>
+              <Text style={styles.applyTxt}>Applica</Text>
+            </Pressable>
+          </View>
+          {couponInfo ? (
+            <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>
+              ✓ Codice {couponInfo.code} applicato: -{couponInfo.percent_off}%
+            </Text>
+          ) : couponErr ? (
+            <Text style={{ color: colors.error, marginTop: spacing.sm }}>{couponErr}</Text>
+          ) : null}
         </View>
 
         {msg ? (
@@ -140,6 +191,30 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   bestTxt: { color: colors.onBrandPrimary, fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
+  oldPrice: {
+    color: colors.muted,
+    fontSize: 13,
+    textDecorationLine: "line-through",
+  },
+  coupon: {
+    flex: 1,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    color: colors.onSurface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  applyBtn: {
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    justifyContent: "center",
+  },
+  applyTxt: { color: colors.brandPrimary, fontWeight: "700" },
   footer: {
     position: "absolute",
     left: 0,

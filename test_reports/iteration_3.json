@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 3 testing complete. Backend: 22 passed, 1 skipped (register-push env-dependent). All new features verified via pytest against public preview URL: Favorites toggle add/remove and list; Coupons admin CRUD (create/list/delete) + validate (valid=200, invalid=404); Checkout applies 20% discount to 12m plan → 720 EUR, increments used_count, second use also succeeds, exhausted coupon returns 410, invalid returns 404; Register-push updates device_token in Mongo (upstream 401 in preview since EMERGENT_PUSH_KEY is placeholder — currently re-raises as HTTP 500 instead of being non-blocking); Admin article creation still succeeds (push side-effect swallowed). Upload endpoint SURPRISINGLY WORKS in preview — small mp3 uploaded and re-fetched via GET /api/files/{path} returning 200. Regression sanity: auth, categories, articles, media, messages, admin stats all pass. Frontend: admin login works, Profile→Preferiti opens empty state 'Non hai ancora salvato preferiti.' correctly, heart button on article detail toggles ♡→♥ (gold) with backend persistence confirmed, admin Sconti tab renders form with all testIDs (coupon-code/percent/max/save-coupon), Video/Med. tab shows 'Carica file audio/video' OutlineButton with testID upload-file. Paywall UI not exercised end-to-end because admin user is premium (upgrade-cta hidden); code inspection confirms testIDs plan-12m, coupon-input, apply-coupon are present and paywall.tsx wires validate_coupon correctly. No React Native red screens, no deprecated packages detected.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/register-push",
+        "issue": "Handler re-raises HTTPException from upstream 401 (EMERGENT_PUSH_KEY placeholder in preview), so the endpoint returns 500 instead of 201. Spec says it should be 'non-blocking'. DB write of device_token still happens before the raise. To make it truly non-blocking, move the try/except to catch HTTPException too, or drop the explicit 401→500 conversion. Not blocking in production (real key will make it 201). Reference: /app/backend/server.py:942-960"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_features.py",
+    "/app/test_reports/pytest/iteration_3.xml"
+  ],
+  "action_items": [
+    "Optional: make POST /api/register-push truly non-blocking so upstream 401/5xx does not surface as 500 to the client — the device_token is already persisted before the relay call, so the endpoint could always return {status: 'registered'} after logging the upstream error.",
+    "No other action items — all new features (favorites, coupons, checkout discount, upload, push side-effect on article creation) are working."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1039 GET /api/files/{path:path} is intentionally public (needed for embedded media) — OK, but consider validating path prefix to APP_NAME/uploads/ to prevent traversal to other object-storage keys.",
+    "server.py:942 register_push_relay: DB update happens before upstream call which is correct (fallback list works), but the HTTPException re-raise partially defeats the 'non-blocking' contract.",
+    "paywall.tsx uses /api/coupons/validate for preview of discount and then submits raw code in /api/billing/checkout — good: server re-validates and increments used_count only on checkout (avoids double-decrement)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22 passed, 1 skipped env-dependent)",
+    "frontend": "100% of tested flows (favorites toggle, admin coupons UI, admin upload button, empty favorites state, admin login)"
+  },
+  "seed_data_creation": "Created and cleaned up test coupon TESTLANCIO2026 and one-use ONEUSE_* coupon. Created one test article via admin panel and deleted it. Uploaded small (~138B) dummy mp3 to storage — persists in db.uploads (no explicit cleanup path exposed; negligible size).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend test file: /app/backend/tests/test_iteration3_features.py. Admin creds: +393331234567 / Admin2026!. IMPORTANT: For frontend paywall/coupon UI testing you MUST register a new free user (e.g. +39333999XXXXX / TestPass123!) because admin already has premium and upgrade-cta is hidden. Testing frontend via page.goto() to /favorites or /admin loses zustand auth state on hard reload — always use in-app router navigation (tap on Profilo tab → Vedi i miei preferiti / Pannello Admin) to keep auth session. Emergent Object Storage IS provisioned in this preview and /api/admin/upload actually works. Push relay returns 500 in preview (env-dependent).",
+  "rca_of_issue": "N/A - no user-facing bugs; only minor spec nit on register-push status code semantics documented above."
+}

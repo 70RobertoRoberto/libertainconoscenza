@@ -37,6 +37,7 @@ EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 ADMIN_PHONE = os.environ["ADMIN_PHONE"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 EMERGENT_PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 INTEGRATION_PROXY_URL = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
 STORAGE_URL = INTEGRATION_PROXY_URL.rstrip("/") + "/objstore/api/v1/storage"
 PUSH_BASE_URL = INTEGRATION_PROXY_URL
@@ -646,6 +647,12 @@ async def create_article(inp: ArticleIn):
         "created_at": now_iso(),
     }
     await db.articles.insert_one(doc)
+    # Notify all users
+    try:
+        recipients = await _all_user_ids()
+        await send_push_bg(recipients, "Nuovo articolo", inp.title, action_url=f"/article/{doc['id']}")
+    except Exception as e:
+        logger.warning(f"Push failed: {e}")
     return _serialize_article(doc)
 
 
@@ -783,6 +790,12 @@ async def create_media(inp: MediaIn):
         "created_at": now_iso(),
     }
     await db.media.insert_one(doc)
+    try:
+        recipients = await _all_user_ids()
+        title = "Nuova meditazione" if inp.kind == "meditation" else "Nuovo video"
+        await send_push_bg(recipients, title, inp.title, action_url=f"/media/{doc['id']}")
+    except Exception as e:
+        logger.warning(f"Push failed: {e}")
     return _serialize_media(doc)
 
 
@@ -832,6 +845,11 @@ async def send_message(inp: MessageIn):
         "created_at": now_iso(),
     }
     await db.messages.insert_one(doc)
+    try:
+        recipients = [inp.target_user_id] if inp.target_user_id else await _all_user_ids()
+        await send_push_bg(recipients, inp.title, inp.body[:120], action_url="/messages")
+    except Exception as e:
+        logger.warning(f"Push failed: {e}")
     return {
         "id": doc["id"],
         "title": doc["title"],
@@ -921,6 +939,169 @@ async def save_push_token(inp: PushTokenIn, user: dict = Depends(current_user)):
     return {"ok": True}
 
 
+@api.post("/register-push", status_code=201)
+async def register_push_relay(body: RegisterPushBody):
+    """Relay to Emergent managed push (SuprSend). Non-blocking — token stored locally regardless."""
+    await db.users.update_one(
+        {"id": body.user_id},
+        {"$set": {"device_token": body.device_token, "push_platform": body.platform}},
+    )
+    try:
+        resp = await _push_client.post("/api/v1/push/users/register", json=body.model_dump())
+        if resp.status_code < 400:
+            return {"status": "registered"}
+        logger.warning(f"Push registration upstream {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"Push registration relay failed (non-blocking): {e}")
+    return {"status": "stored_locally"}
+
+
+# ---------------------------------------------------------------------------
+# Favorites
+# ---------------------------------------------------------------------------
+@api.post("/favorites/toggle")
+async def toggle_favorite(inp: FavoriteIn, user: dict = Depends(current_user)):
+    if inp.content_type not in ("article", "media"):
+        raise HTTPException(400, "content_type non valido")
+    key = {"user_id": user["id"], "content_id": inp.content_id}
+    existing = await db.favorites.find_one(key)
+    if existing:
+        await db.favorites.delete_one(key)
+        return {"favorited": False}
+    await db.favorites.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "content_id": inp.content_id,
+        "content_type": inp.content_type,
+        "created_at": now_iso(),
+    })
+    return {"favorited": True}
+
+
+@api.get("/favorites")
+async def list_favorites(user: dict = Depends(current_user)):
+    cursor = db.favorites.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1)
+    articles, media = [], []
+    async for f in cursor:
+        if f["content_type"] == "article":
+            a = await db.articles.find_one({"id": f["content_id"]}, {"_id": 0})
+            if a:
+                articles.append(_serialize_article(a))
+        else:
+            m = await db.media.find_one({"id": f["content_id"]}, {"_id": 0})
+            if m:
+                media.append(_serialize_media(m))
+    ids = set()
+    async for f in db.favorites.find({"user_id": user["id"]}, {"_id": 0, "content_id": 1}):
+        ids.add(f["content_id"])
+    return {"articles": articles, "media": media, "ids": list(ids)}
+
+
+# ---------------------------------------------------------------------------
+# File upload (Emergent Object Storage)
+# ---------------------------------------------------------------------------
+ALLOWED_MIME = {
+    "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac",
+    "video/mp4", "video/quicktime", "video/webm",
+    "image/jpeg", "image/png", "image/webp",
+}
+
+
+@api.post("/admin/upload", dependencies=[Depends(require_admin)])
+async def admin_upload(file: UploadFile = File(...)):
+    """Upload a file to Emergent Object Storage; returns a public API URL."""
+    if file.content_type not in ALLOWED_MIME:
+        raise HTTPException(415, f"Tipo file non supportato: {file.content_type}")
+    data = await file.read()
+    if len(data) > 300 * 1024 * 1024:
+        raise HTTPException(413, "File troppo grande (max 300MB)")
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"
+    path = f"{APP_NAME}/uploads/{uuid.uuid4()}.{ext}"
+    result = await run_in_threadpool(_put_object_sync, path, data, file.content_type)
+    stored_path = result.get("path", path)
+    # persist metadata
+    await db.uploads.insert_one({
+        "id": str(uuid.uuid4()),
+        "path": stored_path,
+        "mime": file.content_type,
+        "size": len(data),
+        "filename": file.filename,
+        "created_at": now_iso(),
+    })
+    public_url = f"/api/files/{stored_path}"
+    return {"path": stored_path, "url": public_url, "size": len(data), "mime": file.content_type}
+
+
+@api.get("/files/{path:path}")
+async def get_file(path: str):
+    """Serve a stored file. Public because embedded media needs to load without headers."""
+    try:
+        data, ctype = await run_in_threadpool(_get_object_sync, path)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(404, "File non trovato")
+    return Response(content=data, media_type=ctype)
+
+
+# ---------------------------------------------------------------------------
+# Coupons
+# ---------------------------------------------------------------------------
+@api.post("/admin/coupons", dependencies=[Depends(require_admin)])
+async def create_coupon(inp: CouponIn):
+    code = inp.code.strip().upper()
+    if not re.fullmatch(r"[A-Z0-9_-]{3,32}", code):
+        raise HTTPException(400, "Codice non valido")
+    if await db.coupons.find_one({"code": code}):
+        raise HTTPException(409, "Codice già esistente")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "code": code,
+        "percent_off": inp.percent_off,
+        "max_uses": inp.max_uses,
+        "used_count": 0,
+        "expires_at": inp.expires_at,
+        "created_at": now_iso(),
+    }
+    await db.coupons.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/admin/coupons", dependencies=[Depends(require_admin)])
+async def list_coupons():
+    cursor = db.coupons.find({}, {"_id": 0}).sort("created_at", -1)
+    items = []
+    async for c in cursor:
+        items.append(c)
+    return {"items": items}
+
+
+@api.delete("/admin/coupons/{code}", dependencies=[Depends(require_admin)])
+async def delete_coupon(code: str):
+    r = await db.coupons.delete_one({"code": code.upper()})
+    return {"deleted": r.deleted_count}
+
+
+@api.post("/coupons/validate")
+async def validate_coupon(payload: dict, user: dict = Depends(current_user)):
+    code = (payload.get("code") or "").strip().upper()
+    if not code:
+        raise HTTPException(400, "Codice mancante")
+    c = await db.coupons.find_one({"code": code}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Codice non valido")
+    if c.get("used_count", 0) >= c.get("max_uses", 0):
+        raise HTTPException(410, "Codice esaurito")
+    if c.get("expires_at"):
+        try:
+            if datetime.fromisoformat(c["expires_at"].replace("Z", "+00:00")) < datetime.now(timezone.utc):
+                raise HTTPException(410, "Codice scaduto")
+        except ValueError:
+            pass
+    return {"code": c["code"], "percent_off": c["percent_off"]}
+
+
 # ---------------------------------------------------------------------------
 # Subscription / checkout
 # ---------------------------------------------------------------------------
@@ -929,13 +1110,25 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
     if inp.plan not in PLANS:
         raise HTTPException(400, "Piano non valido")
     plan = PLANS[inp.plan]
-    # For MVP: create a "pending" subscription entry; a real Stripe integration
-    # would return a Checkout Session URL. Admin can activate manually.
+    amount = plan["price_eur"]
+    applied_code = None
+    if inp.coupon_code:
+        code = inp.coupon_code.strip().upper()
+        c = await db.coupons.find_one({"code": code})
+        if not c:
+            raise HTTPException(404, "Codice sconto non valido")
+        if c.get("used_count", 0) >= c.get("max_uses", 0):
+            raise HTTPException(410, "Codice sconto esaurito")
+        amount = round(amount * (100 - c["percent_off"]) / 100)
+        applied_code = code
+        await db.coupons.update_one({"code": code}, {"$inc": {"used_count": 1}})
     order = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
         "plan": inp.plan,
-        "amount_eur": plan["price_eur"],
+        "amount_eur": amount,
+        "original_eur": plan["price_eur"],
+        "coupon_code": applied_code,
         "months": plan["months"],
         "status": "pending",
         "created_at": now_iso(),
@@ -944,7 +1137,9 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
     return {
         "order_id": order["id"],
         "plan": inp.plan,
-        "amount_eur": plan["price_eur"],
+        "amount_eur": amount,
+        "original_eur": plan["price_eur"],
+        "coupon_code": applied_code,
         "status": "pending",
         "message": "Ordine registrato. Sarà attivato dopo conferma del pagamento.",
     }
@@ -999,6 +1194,69 @@ async def import_youtube_channel(inp: YoutubeImportIn):
         if not m:
             raise HTTPException(400, "Impossibile trovare il canale YouTube")
         channel_id = m.group(1)
+
+        # Prefer YouTube Data API v3 if API key configured (full archive), fallback to RSS (last 15)
+        imported = 0
+        skipped = 0
+        total = 0
+
+        if YOUTUBE_API_KEY:
+            async with httpx.AsyncClient(timeout=30) as h:
+                # 1) get uploads playlistId
+                ch = await h.get(
+                    "https://www.googleapis.com/youtube/v3/channels",
+                    params={"part": "contentDetails", "id": channel_id, "key": YOUTUBE_API_KEY},
+                )
+                ch.raise_for_status()
+                items = ch.json().get("items", [])
+                if not items:
+                    raise HTTPException(400, "Canale non trovato via API")
+                uploads = items[0]["contentDetails"]["relatedPlaylists"]["uploads"]
+
+                # 2) paginate playlistItems
+                page_token = None
+                while True:
+                    params = {
+                        "part": "snippet,contentDetails",
+                        "playlistId": uploads,
+                        "maxResults": 50,
+                        "key": YOUTUBE_API_KEY,
+                    }
+                    if page_token:
+                        params["pageToken"] = page_token
+                    p = await h.get("https://www.googleapis.com/youtube/v3/playlistItems", params=params)
+                    p.raise_for_status()
+                    data = p.json()
+                    for it in data.get("items", []):
+                        total += 1
+                        snip = it["snippet"]
+                        vid = it["contentDetails"]["videoId"]
+                        url = f"https://www.youtube.com/watch?v={vid}"
+                        if await db.media.find_one({"media_url": url}):
+                            skipped += 1
+                            continue
+                        thumbs = snip.get("thumbnails", {})
+                        thumb = (thumbs.get("high") or thumbs.get("medium") or thumbs.get("default") or {}).get("url") or f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+                        await db.media.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "title": snip.get("title", f"Video {vid}"),
+                            "description": (snip.get("description") or "")[:1000],
+                            "category": inp.category,
+                            "kind": "video",
+                            "media_url": url,
+                            "thumbnail_url": thumb,
+                            "duration_sec": None,
+                            "is_premium": inp.is_premium,
+                            "views": 0,
+                            "created_at": now_iso(),
+                        })
+                        imported += 1
+                    page_token = data.get("nextPageToken")
+                    if not page_token:
+                        break
+            return {"imported": imported, "skipped": skipped, "total": total, "channel_id": channel_id, "source": "youtube_api"}
+
+        # Fallback: RSS (only last 15)
         async with httpx.AsyncClient(timeout=20) as h:
             rss = await h.get(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
             rss.raise_for_status()
@@ -1007,12 +1265,9 @@ async def import_youtube_channel(inp: YoutubeImportIn):
         titles = re.findall(r"<media:title>([^<]+)</media:title>", feed)
         thumbs = re.findall(r'<media:thumbnail url="([^"]+)"', feed)
         descs = re.findall(r"<media:description>([^<]*)</media:description>", feed, re.S)
-
-        imported = 0
-        skipped = 0
+        total = len(vids)
         for i, vid in enumerate(vids):
             url = f"https://www.youtube.com/watch?v={vid}"
-            # skip duplicates
             if await db.media.find_one({"media_url": url}):
                 skipped += 1
                 continue
@@ -1033,7 +1288,7 @@ async def import_youtube_channel(inp: YoutubeImportIn):
                 "created_at": now_iso(),
             })
             imported += 1
-        return {"imported": imported, "skipped": skipped, "total": len(vids), "channel_id": channel_id}
+        return {"imported": imported, "skipped": skipped, "total": total, "channel_id": channel_id, "source": "rss"}
     except HTTPException:
         raise
     except Exception as e:
