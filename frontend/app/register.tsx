@@ -26,6 +26,7 @@ export default function Register() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [referral, setReferral] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -35,7 +36,7 @@ export default function Register() {
     if (password.length < 6) return setErr(t("err_min"));
     setLoading(true);
     try {
-      const user = await auth.register(phone.trim(), password, name.trim() || undefined);
+      const user = await auth.register(phone.trim(), password, name.trim() || undefined, referral.trim() || undefined);
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -116,6 +117,17 @@ export default function Register() {
             placeholder="Crea una password sicura"
             placeholderTextColor={colors.muted}
             secureTextEntry
+            style={styles.input}
+          />
+
+          <Text style={[styles.label, { marginTop: spacing.lg }]}>Codice referral (facoltativo)</Text>
+          <TextInput
+            testID="register-referral-input"
+            value={referral}
+            onChangeText={setReferral}
+            placeholder="Es. MAESTRO-2026"
+            placeholderTextColor={colors.muted}
+            autoCapitalize="characters"
             style={styles.input}
           />
 

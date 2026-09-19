@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 4 testing complete. Backend: 21/21 passed (100%) via pytest against public preview URL — Search (medita returns 5 articles + 5 media, case-insensitive, q<2 → 422, auth required); Comments (POST/GET desc-sorted/DELETE own, invalid content_type → 400); Completions (idempotent — 2nd POST returns {already:true}, GET lists it, /certificate/{id} returns {user_name, title, category, completed_at, certificate_id}, 404 for uncompleted); Referrals (admin code confirmed 'MAESTRO-2026', register with MAESTRO-2026 increments admin count by 1 (verified pre/post via /referrals/me), invalid referral_code silently ignored — user still created, fresh test user +393330000001 registered with password Test2026!). Regression sanity: articles/media/favorites/coupons/admin-stats all 200. Frontend (mobile viewport 390×844, admin logged in): home-search input renders on Home tab, typing 'medita' shows 'Risultati per medita' header with 3 search-article-* + 2 search-media-* rows; opening 'Meditazione guidata: respiro e presenza' shows AudioPlayer with '0:00 / 6:12' tabular time and three controls (audio-back-15, audio-toggle, audio-fwd-15) — tapping audio-toggle does NOT crash the bundle; download-certificate button visible with 🏅 emoji + label 'Scarica attestato di completamento' and tapping it fires POST /completions (200) + GET /certificate (200) in sequence; article detail shows 'Commenti (N)' section with new-comment TextInput and send-comment 'Invia' button — posting bumps count 0→1 and comment body appears with 'Amministratore' author label; Profile tab shows 'Invita e guadagna' card with 🎁 icon, 'MAESTRO-2026' in gold (testID referral-code), '3 invitati' counter, and gold 'Condividi il codice' button (testID share-referral). No React Native red screen. expo-audio (correct non-deprecated package) used in AudioPlayer.tsx. Only browser console warnings are the expected expo-notifications 'not fully supported on web' — non-blocking.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration4_features.py",
+    "/app/test_reports/pytest/iteration_4.xml"
+  ],
+  "action_items": [
+    "No action items — all iteration-4 features (Search, Comments, Completions/Certificates, Referral, In-app AudioPlayer) work as spec'd on both backend and frontend.",
+    "Optional: leftover TEST_ users from register-with-referral tests (+3933381xxxx, +3933382xxxx, +393330000001) remain in db.users as requested by main agent. No cleanup needed unless desired."
+  ],
+  "critical_code_review_comments": [
+    "server.py:592-607 /api/search uses re.escape on q — safe against ReDoS. Good.",
+    "server.py:640-648 DELETE /api/comments/{id} correctly checks ownership OR admin — good authorization pattern.",
+    "server.py:654-675 POST /api/completions is idempotent by design (find_one first) — clean pattern; also snapshots title/category into completions doc so certificates survive later content edits.",
+    "server.py:727-756 register() gracefully handles missing/invalid referral_code (silent ignore) and always generates a unique referral_code with a while-loop guard against collisions.",
+    "server.py:262-266 _gen_referral_code strips diacritics and uses uppercased first-6-chars-of-name + 4 random hex digits — reasonable; admin has an explicit override 'MAESTRO-2026'.",
+    "AudioPlayer.tsx uses expo-audio (correct, non-deprecated) — useAudioPlayer + useAudioPlayerStatus hooks; no expo-av. ✓"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration4_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21)",
+    "frontend": "100% of tested flows (search results, in-app audio player render + tap, certificate network calls, comment post + count update, referral card render)"
+  },
+  "seed_data_creation": "Registered fresh test users +3933381xxxx and +3933382xxxx (one per parametrized run) and +393330000001 (Test2026!) via /api/auth/register with referral_code MAESTRO-2026 for referral count assertions. Two comments (TEST_ciao, TEST_second, TEST_commento_auto) created on articles — the DELETE tests remove them at end; the frontend-created TEST_commento_auto remains on the sample article. All coupon/ONEUSE artifacts from prior iterations cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 4 backend test file: /app/backend/tests/test_iteration4_features.py. Fresh referral test user: phone +393330000001 / password Test2026! (created with referral_code MAESTRO-2026; may already exist → 409 on re-run, handled). Admin creds: +393331234567 / Admin2026!. Admin referral_code is seeded to 'MAESTRO-2026' at startup and backfilled if missing. IMPORTANT for phone validation: normalize_phone at server.py:193-205 requires digits-only tail (\\+\\d{8,15}) — do NOT use uuid4().hex (contains a-f letters) for unique phones; use uuid4().int %% 10000 or similar. Frontend testIDs verified: home-search, clear-search, search-article-<id>, search-media-<id>, audio-toggle, audio-back-15, audio-fwd-15, download-certificate, new-comment, send-comment, referral-code, share-referral. AudioPlayer in web preview does not autoplay due to browser policy but does not crash. Print/PDF flow triggers a browser 'print()' throttle warning ('Ignoring too frequent calls to print()') if download-certificate is tapped rapidly — cosmetic only.",
+  "rca_of_issue": "N/A — no bugs found. During test authoring I initially generated phone tails with uuid4().hex which contains hex letters and failed the server-side regex \\+\\d{8,15} → 400 'Numero di telefono non valido'. Fixed the test by switching to numeric-only uuid4().int modulo. Not a product bug."
+}

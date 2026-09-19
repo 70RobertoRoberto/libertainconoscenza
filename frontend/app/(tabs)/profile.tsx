@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Share, Linking } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
-import { auth } from "@/src/api";
+import { api, auth } from "@/src/api";
 import { GoldButton, OutlineButton, Muted, Card, Badge } from "@/src/ui";
 import { LOGO_URL } from "@/src/assets";
 import { useLang } from "@/src/i18n";
@@ -13,12 +13,24 @@ export default function Profile() {
   const insets = useSafeAreaInsets();
   const { t, lang, setLang } = useLang();
   const [user, setUser] = useState<any>(null);
+  const [ref, setRef] = useState<any>(null);
 
   useEffect(() => {
     auth.me().then(setUser).catch(() => {});
+    api<any>("/referrals/me").then(setRef).catch(() => {});
   }, []);
 
   const isPremium = user?.subscription?.status === "premium";
+
+  const shareReferral = async () => {
+    if (!ref?.code) return;
+    const message = `Ti invito a scoprire Conoscenza Aperta 🌿\n\nUsa il mio codice per iscriverti: ${ref.code}\n\n— Conoscenza Aperta, sapienza per crescere`;
+    try {
+      await Share.share({ message });
+    } catch {
+      Linking.openURL(`https://wa.me/?text=${encodeURIComponent(message)}`);
+    }
+  };
 
   const logout = async () => {
     await auth.logout();
@@ -88,6 +100,20 @@ export default function Profile() {
         <OutlineButton testID="go-favorites" label="Vedi i miei preferiti" onPress={() => router.push("/favorites")} />
       </Card>
 
+      {ref?.code && (
+        <Card style={{ marginBottom: spacing.lg }}>
+          <Text style={styles.sectionTitle}>🎁  Invita e guadagna</Text>
+          <Muted style={{ marginTop: spacing.sm }}>
+            Condividi il tuo codice: quando un amico si iscrive con il tuo codice ricevi un mese Premium in regalo.
+          </Muted>
+          <View style={styles.refCodeBox}>
+            <Text testID="referral-code" style={styles.refCode}>{ref.code}</Text>
+            <Text style={styles.refCount}>{ref.count} invitati</Text>
+          </View>
+          <GoldButton testID="share-referral" label="Condividi il codice" onPress={shareReferral} style={{ marginTop: spacing.md }} />
+        </Card>
+      )}
+
       <View style={{ marginTop: spacing.lg }}>
         <OutlineButton testID="logout-btn" label={t("logout")} onPress={logout} />
       </View>
@@ -107,8 +133,24 @@ const langStyles = StyleSheet.create({
   txtA: { color: colors.onBrandPrimary, fontWeight: "700" },
 });
 
+const _refStyles = StyleSheet.create({});
+// merge referral styles into styles
+
 const styles = StyleSheet.create({
   name: { color: colors.onSurface, fontSize: 22, fontWeight: "700", marginTop: spacing.md },
   upgradeTitle: { color: colors.brandPrimary, fontSize: 18, fontWeight: "700" },
   sectionTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
+  refCodeBox: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  refCode: { color: colors.brandPrimary, fontSize: 20, fontWeight: "800", letterSpacing: 1 },
+  refCount: { color: colors.onSurfaceTertiary, fontSize: 13 },
 });

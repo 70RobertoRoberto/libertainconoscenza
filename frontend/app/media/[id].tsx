@@ -15,7 +15,9 @@ import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
-import { Muted, GoldButton } from "@/src/ui";
+import { Muted, GoldButton, OutlineButton } from "@/src/ui";
+import { AudioPlayer } from "@/src/AudioPlayer";
+import { generateCertificate } from "@/src/certificate";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -75,7 +77,33 @@ export default function MediaDetail() {
   const isRelativeMedia = data.media_url && data.media_url.startsWith("/api/");
   const backendBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
   const fullUrl = isRelativeMedia ? backendBase + data.media_url : data.media_url;
+  const isAudio = data.kind === "meditation" && /\.(mp3|m4a|wav|ogg|aac)(\?|$)/i.test(fullUrl);
+  const isYouTube = /youtube\.com|youtu\.be/.test(fullUrl);
+
   const openMedia = () => Linking.openURL(fullUrl);
+
+  const markComplete = async () => {
+    try {
+      await api("/completions", {
+        method: "POST",
+        body: JSON.stringify({ content_id: id, content_type: "media" }),
+      });
+    } catch {}
+  };
+
+  const downloadCert = async () => {
+    try {
+      const cert = await api<any>(`/certificate/${id}`);
+      await generateCertificate(cert);
+    } catch (e: any) {
+      // ensure completion then retry
+      await markComplete();
+      try {
+        const cert = await api<any>(`/certificate/${id}`);
+        await generateCertificate(cert);
+      } catch {}
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -111,11 +139,25 @@ export default function MediaDetail() {
             <Muted>· {data.views} visualizzazioni</Muted>
           </View>
           <Text style={styles.body}>{data.description}</Text>
-          <GoldButton
-            testID="play-media"
-            label={data.kind === "meditation" ? "▶  Ascolta ora" : "▶  Guarda ora"}
-            onPress={openMedia}
-            style={{ marginTop: spacing.xl }}
+
+          {isAudio ? (
+            <View style={{ marginTop: spacing.xl }}>
+              <AudioPlayer url={fullUrl} onComplete={markComplete} />
+            </View>
+          ) : (
+            <GoldButton
+              testID="play-media"
+              label={data.kind === "meditation" ? "▶  Ascolta ora" : "▶  Guarda ora"}
+              onPress={openMedia}
+              style={{ marginTop: spacing.xl }}
+            />
+          )}
+
+          <OutlineButton
+            testID="download-certificate"
+            label="🏅  Scarica attestato di completamento"
+            onPress={downloadCert}
+            style={{ marginTop: spacing.md }}
           />
         </View>
       </ScrollView>

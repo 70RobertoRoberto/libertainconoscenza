@@ -39,7 +39,9 @@
       "expo-secure-store",
       "expo-web-browser",
       "expo-status-bar",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-audio",
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true

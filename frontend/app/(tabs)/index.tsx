@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   RefreshControl,
   FlatList,
+  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,20 +32,27 @@ type Article = {
 export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [q, setQ] = useState("");
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["articles-home"],
     queryFn: () => api<{ items: Article[] }>("/articles?limit=20"),
   });
 
+  const { data: searchRes } = useQuery({
+    queryKey: ["search", q],
+    queryFn: () => api<any>(`/search?q=${encodeURIComponent(q)}`),
+    enabled: q.trim().length >= 2,
+  });
+
   const items = data?.items || [];
   const hero = items[0];
   const rest = items.slice(1);
+  const searching = q.trim().length >= 2;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <FlatList
-        data={rest}
         keyExtractor={(x) => x.id}
         contentContainerStyle={{
           paddingTop: insets.top + spacing.md,
@@ -63,32 +71,78 @@ export default function Home() {
               </View>
             </View>
 
-            {hero && (
-              <Pressable
-                testID={`article-hero-${hero.id}`}
-                onPress={() => router.push(`/article/${hero.id}`)}
-                style={styles.heroWrap}
-              >
-                <Image
-                  source={{ uri: hero.image_url || CATEGORY_IMAGES[hero.category] || DEFAULT_IMAGE }}
-                  style={styles.heroImg}
-                />
-                <LinearGradient
-                  colors={["transparent", "rgba(10,15,13,0.95)"]}
-                  style={styles.heroGrad}
-                />
-                <View style={styles.heroText}>
-                  <Text style={styles.heroCat}>{hero.category.toUpperCase()}</Text>
-                  <Text style={styles.heroTitle} numberOfLines={3}>
-                    {hero.title}
-                  </Text>
-                </View>
-              </Pressable>
-            )}
+            <View style={styles.searchWrap}>
+              <TextInput
+                testID="home-search"
+                value={q}
+                onChangeText={setQ}
+                placeholder="Cerca articoli, meditazioni…"
+                placeholderTextColor={colors.muted}
+                style={styles.search}
+                returnKeyType="search"
+              />
+              {q ? (
+                <Pressable testID="clear-search" onPress={() => setQ("")} style={styles.clearBtn}>
+                  <Text style={{ color: colors.muted, fontSize: 18 }}>✕</Text>
+                </Pressable>
+              ) : null}
+            </View>
 
-            <Text style={styles.section}>Ultimi articoli</Text>
+            {searching ? (
+              <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
+                <Text style={styles.section}>Risultati per "{q}"</Text>
+                {(searchRes?.articles || []).map((a: any) => (
+                  <Pressable key={a.id} testID={`search-article-${a.id}`} onPress={() => router.push(`/article/${a.id}`)} style={styles.row}>
+                    <Image source={{ uri: a.image_url || CATEGORY_IMAGES[a.category] || DEFAULT_IMAGE }} style={styles.rowImg} />
+                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                      <Text style={styles.rowCat}>{a.category.toUpperCase()}</Text>
+                      <Text style={styles.rowTitle} numberOfLines={2}>{a.title}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+                {(searchRes?.media || []).map((m: any) => (
+                  <Pressable key={m.id} testID={`search-media-${m.id}`} onPress={() => router.push(`/media/${m.id}`)} style={styles.row}>
+                    <Image source={{ uri: m.thumbnail_url || CATEGORY_IMAGES[m.category] || DEFAULT_IMAGE }} style={styles.rowImg} />
+                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                      <Text style={styles.rowCat}>{m.kind === "meditation" ? "MEDITAZIONE" : "VIDEO"}</Text>
+                      <Text style={styles.rowTitle} numberOfLines={2}>{m.title}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+                {!(searchRes?.articles?.length || searchRes?.media?.length) && (
+                  <Muted style={{ marginTop: spacing.md }}>Nessun risultato</Muted>
+                )}
+              </View>
+            ) : (
+              <>
+                {hero && (
+                  <Pressable
+                    testID={`article-hero-${hero.id}`}
+                    onPress={() => router.push(`/article/${hero.id}`)}
+                    style={styles.heroWrap}
+                  >
+                    <Image
+                      source={{ uri: hero.image_url || CATEGORY_IMAGES[hero.category] || DEFAULT_IMAGE }}
+                      style={styles.heroImg}
+                    />
+                    <LinearGradient
+                      colors={["transparent", "rgba(10,15,13,0.95)"]}
+                      style={styles.heroGrad}
+                    />
+                    <View style={styles.heroText}>
+                      <Text style={styles.heroCat}>{hero.category.toUpperCase()}</Text>
+                      <Text style={styles.heroTitle} numberOfLines={3}>
+                        {hero.title}
+                      </Text>
+                    </View>
+                  </Pressable>
+                )}
+                <Text style={styles.section}>Ultimi articoli</Text>
+              </>
+            )}
           </View>
         }
+        data={searching ? [] : rest}
         renderItem={({ item }) => (
           <Pressable
             testID={`article-row-${item.id}`}
@@ -183,5 +237,27 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginTop: 4,
     lineHeight: 20,
+  },
+  searchWrap: {
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+    position: "relative",
+  },
+  search: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
+    paddingRight: 40,
+    color: colors.onSurface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 15,
+  },
+  clearBtn: {
+    position: "absolute",
+    right: spacing.md,
+    top: 10,
+    padding: 4,
   },
 });

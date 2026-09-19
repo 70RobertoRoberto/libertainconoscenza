@@ -81,6 +81,7 @@ class RegisterIn(BaseModel):
     phone: str
     password: str = Field(min_length=6, max_length=128)
     name: Optional[str] = None
+    referral_code: Optional[str] = None
 
 
 class LoginIn(BaseModel):
@@ -175,6 +176,17 @@ class RegisterPushBody(BaseModel):
     device_token: str
 
 
+class CommentIn(BaseModel):
+    content_id: str
+    content_type: str  # "article" | "media"
+    body: str = Field(min_length=1, max_length=1000)
+
+
+class CompletionIn(BaseModel):
+    content_id: str
+    content_type: str  # "article" | "media"
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -243,7 +255,15 @@ def to_public_user(u: dict) -> dict:
         "name": u.get("name"),
         "is_admin": u.get("is_admin", False),
         "subscription": u.get("subscription", {"status": "free"}),
+        "referral_code": u.get("referral_code"),
     }
+
+
+def _gen_referral_code(name: str) -> str:
+    import random, string
+    base = re.sub(r"[^A-Za-z]", "", (name or "AMICO"))[:6].upper() or "AMICO"
+    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"{base}-{suffix}"
 
 
 def now_iso() -> str:
@@ -263,6 +283,9 @@ async def startup():
     await db.views.create_index([("content_id", 1), ("date", 1)])
     await db.favorites.create_index([("user_id", 1), ("content_id", 1)], unique=True)
     await db.coupons.create_index("code", unique=True)
+    await db.users.create_index("referral_code", unique=True, sparse=True)
+    await db.comments.create_index([("content_id", 1), ("created_at", -1)])
+    await db.completions.create_index([("user_id", 1), ("content_id", 1)], unique=True)
 
     # Init object storage (best-effort)
     try:
@@ -281,11 +304,12 @@ async def startup():
             "name": "Amministratore",
             "is_admin": True,
             "subscription": {"status": "premium", "plan": "12m", "expires_at": None},
+            "referral_code": "MAESTRO-2026",
+            "referral_count": 0,
             "created_at": now_iso(),
         })
         logger.info(f"Admin seeded: {admin_phone}")
     else:
-        # Ensure admin flag and reset password (idempotent)
         await db.users.update_one(
             {"phone": admin_phone},
             {"$set": {
@@ -294,6 +318,18 @@ async def startup():
                 "subscription": {"status": "premium", "plan": "12m", "expires_at": None},
             }},
         )
+        if not existing.get("referral_code"):
+            await db.users.update_one(
+                {"phone": admin_phone},
+                {"$set": {"referral_code": "MAESTRO-2026", "referral_count": 0}},
+            )
+
+    # Backfill referral_code for existing users
+    async for u in db.users.find({"referral_code": {"$exists": False}}, {"_id": 0, "id": 1, "name": 1}):
+        code = _gen_referral_code(u.get("name") or "AMICO")
+        while await db.users.find_one({"referral_code": code}):
+            code = _gen_referral_code(u.get("name") or "AMICO")
+        await db.users.update_one({"id": u["id"]}, {"$set": {"referral_code": code, "referral_count": 0}})
 
     # Seed demo articles if empty
     count = await db.articles.count_documents({})
@@ -551,6 +587,141 @@ async def get_plans():
 
 
 # ---------------------------------------------------------------------------
+# Search
+# ---------------------------------------------------------------------------
+@api.get("/search")
+async def search(q: str = Query(..., min_length=2), user: dict = Depends(current_user)):
+    rgx = {"$regex": re.escape(q), "$options": "i"}
+    articles = []
+    async for a in db.articles.find(
+        {"$or": [{"title": rgx}, {"summary": rgx}, {"category": rgx}]},
+        {"_id": 0},
+    ).limit(30):
+        articles.append(_serialize_article(a))
+    media = []
+    async for m in db.media.find(
+        {"$or": [{"title": rgx}, {"description": rgx}, {"category": rgx}]},
+        {"_id": 0},
+    ).limit(30):
+        media.append(_serialize_media(m))
+    return {"articles": articles, "media": media}
+
+
+# ---------------------------------------------------------------------------
+# Comments
+# ---------------------------------------------------------------------------
+@api.post("/comments")
+async def add_comment(inp: CommentIn, user: dict = Depends(current_user)):
+    if inp.content_type not in ("article", "media"):
+        raise HTTPException(400, "content_type non valido")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "user_name": user.get("name") or user["phone"],
+        "content_id": inp.content_id,
+        "content_type": inp.content_type,
+        "body": inp.body.strip(),
+        "created_at": now_iso(),
+    }
+    await db.comments.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/comments")
+async def list_comments(content_id: str, user: dict = Depends(current_user)):
+    cursor = db.comments.find({"content_id": content_id}, {"_id": 0}).sort("created_at", -1).limit(200)
+    items = []
+    async for c in cursor:
+        items.append(c)
+    return {"items": items}
+
+
+@api.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: str, user: dict = Depends(current_user)):
+    c = await db.comments.find_one({"id": comment_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Non trovato")
+    if c["user_id"] != user["id"] and not user.get("is_admin"):
+        raise HTTPException(403, "Non autorizzato")
+    await db.comments.delete_one({"id": comment_id})
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Completions (for certificates)
+# ---------------------------------------------------------------------------
+@api.post("/completions")
+async def mark_completion(inp: CompletionIn, user: dict = Depends(current_user)):
+    if inp.content_type not in ("article", "media"):
+        raise HTTPException(400, "content_type non valido")
+    key = {"user_id": user["id"], "content_id": inp.content_id}
+    if await db.completions.find_one(key):
+        return {"already": True}
+    # fetch title
+    coll = db.articles if inp.content_type == "article" else db.media
+    doc = await coll.find_one({"id": inp.content_id}, {"_id": 0, "title": 1, "category": 1})
+    if not doc:
+        raise HTTPException(404, "Contenuto non trovato")
+    await db.completions.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "content_id": inp.content_id,
+        "content_type": inp.content_type,
+        "title": doc.get("title", ""),
+        "category": doc.get("category", ""),
+        "completed_at": now_iso(),
+    })
+    return {"ok": True, "title": doc.get("title", ""), "category": doc.get("category", "")}
+
+
+@api.get("/completions")
+async def list_completions(user: dict = Depends(current_user)):
+    cursor = db.completions.find({"user_id": user["id"]}, {"_id": 0}).sort("completed_at", -1)
+    items = []
+    async for c in cursor:
+        items.append(c)
+    return {"items": items}
+
+
+@api.get("/certificate/{content_id}")
+async def certificate_data(content_id: str, user: dict = Depends(current_user)):
+    """Return data needed by the client to render/print a PDF certificate."""
+    c = await db.completions.find_one({"user_id": user["id"], "content_id": content_id}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Contenuto non completato")
+    return {
+        "user_name": user.get("name") or user["phone"],
+        "title": c["title"],
+        "category": c["category"],
+        "completed_at": c["completed_at"],
+        "certificate_id": c["id"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Referrals
+# ---------------------------------------------------------------------------
+@api.get("/referrals/me")
+async def my_referrals(user: dict = Depends(current_user)):
+    u = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referral_code": 1, "referral_count": 1})
+    invited = []
+    async for x in db.users.find({"referred_by": user["id"]}, {"_id": 0, "id": 1, "name": 1, "phone": 1, "subscription": 1, "created_at": 1}):
+        invited.append({
+            "id": x["id"],
+            "name": x.get("name", ""),
+            "phone": x["phone"][:6] + "***" + x["phone"][-3:],
+            "premium": x.get("subscription", {}).get("status") == "premium",
+            "created_at": x.get("created_at", ""),
+        })
+    return {
+        "code": u.get("referral_code"),
+        "count": u.get("referral_count", 0),
+        "invited": invited,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 @api.post("/auth/register", response_model=TokenOut)
@@ -558,6 +729,15 @@ async def register(inp: RegisterIn):
     phone = normalize_phone(inp.phone)
     if await db.users.find_one({"phone": phone}):
         raise HTTPException(409, "Numero già registrato")
+    referred_by = None
+    if inp.referral_code:
+        code = inp.referral_code.strip().upper()
+        ref = await db.users.find_one({"referral_code": code}, {"_id": 0, "id": 1})
+        if ref:
+            referred_by = ref["id"]
+    referral_code = _gen_referral_code(inp.name or "AMICO")
+    while await db.users.find_one({"referral_code": referral_code}):
+        referral_code = _gen_referral_code(inp.name or "AMICO")
     user = {
         "id": str(uuid.uuid4()),
         "phone": phone,
@@ -565,9 +745,14 @@ async def register(inp: RegisterIn):
         "name": inp.name or "",
         "is_admin": False,
         "subscription": {"status": "free"},
+        "referral_code": referral_code,
+        "referred_by": referred_by,
+        "referral_count": 0,
         "created_at": now_iso(),
     }
     await db.users.insert_one(user)
+    if referred_by:
+        await db.users.update_one({"id": referred_by}, {"$inc": {"referral_count": 1}})
     return TokenOut(access_token=make_token(user["id"]), user=to_public_user(user))
 
 
