@@ -4,16 +4,30 @@ import { LogBox, Platform, Linking as RNLinking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { AdOverlay } from "@/src/AdOverlay";
-import * as Notifications from "expo-notifications";
-import * as Linking from "expo-linking";
+import Constants from "expo-constants";
 import { useEffect } from "react";
 import { initLang } from "@/src/i18n";
 
 LogBox.ignoreAllLogs(true);
 
-// Module-scope: disable browser auto-translation on the web preview so that
-// brand names like WhatsApp / Telegram and the user-selected language don't get
-// silently rewritten by Google Chrome / Safari page translators.
+// Expo Go on SDK 53+ removed remote-push support on Android and any call to
+// expo-notifications crashes the whole bundle. Detect Expo Go and skip.
+// Constants.appOwnership === "expo" only in Expo Go; undefined in dev builds.
+const IS_EXPO_GO = Constants.appOwnership === "expo";
+const NOTIFICATIONS_ENABLED = !IS_EXPO_GO && Platform.OS !== "web";
+
+// Lazy require so the import itself never crashes at bundle time.
+function safeNotifications(): any | null {
+  if (!NOTIFICATIONS_ENABLED) return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require("expo-notifications");
+  } catch {
+    return null;
+  }
+}
+
+// Module-scope: disable browser auto-translation on web so brand names / language don't get rewritten.
 if (Platform.OS === "web" && typeof document !== "undefined") {
   try {
     document.documentElement.setAttribute("translate", "no");
@@ -27,27 +41,28 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
   } catch {}
 }
 
-// Module-scope: foreground handler (guarded from web)
-if (Platform.OS !== "web") {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: false,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-}
-
-// Module-scope: Android default channel
-if (Platform.OS === "android") {
-  Notifications.setNotificationChannelAsync("default", {
-    name: "Default",
-    importance: Notifications.AndroidImportance.MAX,
-    sound: "default",
-  });
-}
+// Module-scope: notification handler & Android channel — only outside Expo Go.
+try {
+  const N = safeNotifications();
+  if (N) {
+    N.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    if (Platform.OS === "android") {
+      N.setNotificationChannelAsync("default", {
+        name: "Default",
+        importance: N.AndroidImportance?.MAX ?? 5,
+        sound: "default",
+      });
+    }
+  }
+} catch {}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,33 +79,36 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (Platform.OS === "web") return;
+    const N = safeNotifications();
+    if (!N) return;
+    let tapSub: any = null;
+    try {
+      tapSub = N.addNotificationResponseReceivedListener((response: any) => {
+        const data: any = response?.notification?.request?.content?.data || {};
+        const url = data.deeplink || data.action_url;
+        if (!url) return;
+        if (typeof url === "string" && url.startsWith("http")) {
+          RNLinking.openURL(url);
+        } else {
+          router.push(url as any);
+        }
+      });
 
-    const tapSub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const data: any = response.notification.request.content.data || {};
-      const url = data.deeplink || data.action_url;
-      if (!url) return;
-      if (typeof url === "string" && url.startsWith("http")) {
-        RNLinking.openURL(url);
-      } else {
-        router.push(url as any);
-      }
-    });
-
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (!response) return;
-      const data: any = response.notification.request.content.data || {};
-      const url = data.deeplink || data.action_url;
-      if (!url) return;
-      if (typeof url === "string" && url.startsWith("http")) {
-        RNLinking.openURL(url);
-      } else {
-        router.push(url as any);
-      }
-    });
+      N.getLastNotificationResponseAsync?.().then((response: any) => {
+        if (!response) return;
+        const data: any = response?.notification?.request?.content?.data || {};
+        const url = data.deeplink || data.action_url;
+        if (!url) return;
+        if (typeof url === "string" && url.startsWith("http")) {
+          RNLinking.openURL(url);
+        } else {
+          router.push(url as any);
+        }
+      }).catch(() => {});
+    } catch {}
 
     return () => {
-      tapSub.remove();
+      try { tapSub?.remove?.(); } catch {}
     };
   }, [router]);
 
