@@ -23,7 +23,7 @@ const CATEGORIES = [
   "Filosofia", "Nutrizione", "Somatognostica", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "messages" | "users" | "orders";
+type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "messages" | "users" | "orders";
 
 export default function Admin() {
   const router = useRouter();
@@ -34,6 +34,8 @@ export default function Admin() {
     { key: "stats", label: "Statistiche" },
     { key: "articles", label: "Articoli" },
     { key: "media", label: "Video/Med." },
+    { key: "youtube", label: "YouTube" },
+    { key: "ads", label: "Pubblicità" },
     { key: "messages", label: "Messaggi" },
     { key: "users", label: "Utenti" },
     { key: "orders", label: "Ordini" },
@@ -76,6 +78,8 @@ export default function Admin() {
         {section === "stats" && <StatsSection />}
         {section === "articles" && <ArticlesSection />}
         {section === "media" && <MediaSection />}
+        {section === "youtube" && <YoutubeSection />}
+        {section === "ads" && <AdsSection />}
         {section === "messages" && <MessagesSection />}
         {section === "users" && <UsersSection />}
         {section === "orders" && <OrdersSection />}
@@ -361,6 +365,137 @@ function MediaSection() {
             <Muted style={{ fontSize: 11 }}>{m.kind} · {m.category} · {m.views} viste{m.is_premium ? " · PREMIUM" : ""}</Muted>
           </View>
           <Pressable onPress={() => remove(m.id)}>
+            <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
+          </Pressable>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/* ─────── YouTube import ─────── */
+function YoutubeSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const [url, setUrl] = useState("https://www.youtube.com/@SUMMAAUREA");
+  const [cat, setCat] = useState("Video");
+  const [premium, setPremium] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const run = async () => {
+    setLoading(true); setMsg("");
+    try {
+      if (!url) throw new Error("Inserisci URL canale");
+      const r = await api<any>("/admin/media/import-youtube", {
+        method: "POST",
+        body: JSON.stringify({ channel_url: url, category: cat, is_premium: premium }),
+      });
+      setMsg(`Importati ${r.imported} video (saltati ${r.skipped} già presenti su ${r.total} disponibili).`);
+      qc.invalidateQueries({ queryKey: ["admin-media"] });
+    } catch (e: any) { setMsg(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <Card>
+        <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "700" }}>Importa video da canale YouTube</Text>
+        <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+          Inserisci l'URL di un canale YouTube (es. https://youtube.com/@SUMMAAUREA). Vengono importati gli ultimi 15 video del feed.
+        </Muted>
+        <TextInput
+          testID="yt-url"
+          value={url}
+          onChangeText={setUrl}
+          placeholder="https://www.youtube.com/@..."
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          autoCapitalize="none"
+        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginTop: spacing.md }}>
+          {CATEGORIES.map((c) => (
+            <Pressable key={c} onPress={() => setCat(c)} style={[styles.smallChip, cat === c && styles.smallChipActive]}>
+              <Text style={cat === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+        <Pressable onPress={() => setPremium(!premium)} style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <View style={[styles.checkbox, premium && { backgroundColor: colors.brandPrimary }]} />
+          <Text style={{ color: colors.onSurface }}>Contenuti Premium</Text>
+        </Pressable>
+        {msg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>{msg}</Text> : null}
+        <GoldButton testID="yt-import" label="Importa video del canale" onPress={run} loading={loading} style={{ marginTop: spacing.md }} />
+      </Card>
+    </ScrollView>
+  );
+}
+
+/* ─────── Ads ─────── */
+function AdsSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["admin-ads"], queryFn: () => api<any>("/admin/ads") });
+  const [image, setImage] = useState("");
+  const [click, setClick] = useState("");
+  const [caption, setCaption] = useState("");
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const create = async () => {
+    setLoading(true); setMsg("");
+    try {
+      if (!image) throw new Error("URL immagine richiesto");
+      await api("/admin/ads", {
+        method: "POST",
+        body: JSON.stringify({ image_url: image, click_url: click || null, caption, is_active: true }),
+      });
+      setImage(""); setClick(""); setCaption("");
+      qc.invalidateQueries({ queryKey: ["admin-ads"] });
+      setMsg("Pubblicità creata");
+    } catch (e: any) { setMsg(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const remove = async (id: string) => {
+    await api(`/admin/ads/${id}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["admin-ads"] });
+  };
+  const toggle = async (id: string) => {
+    await api(`/admin/ads/${id}/toggle`, { method: "POST" });
+    qc.invalidateQueries({ queryKey: ["admin-ads"] });
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <Card>
+        <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "700" }}>Nuova pubblicità</Text>
+        <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+          Un banner viene mostrato agli utenti per 5 secondi ogni 10 minuti di uso dell'app.
+        </Muted>
+        <TextInput testID="ad-image" value={image} onChangeText={setImage} placeholder="URL immagine (https://...)" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="none" />
+        <TextInput testID="ad-caption" value={caption} onChangeText={setCaption} placeholder="Titolo/didascalia (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} />
+        <TextInput testID="ad-click" value={click} onChangeText={setClick} placeholder="URL al click (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
+        {msg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>{msg}</Text> : null}
+        <GoldButton testID="save-ad" label="Salva pubblicità" onPress={create} loading={loading} style={{ marginTop: spacing.md }} />
+      </Card>
+
+      <Text style={styles.section}>Pubblicità caricate</Text>
+      {(data?.items || []).length === 0 && <Muted>Nessuna pubblicità</Muted>}
+      {(data?.items || []).map((a: any) => (
+        <View key={a.id} style={styles.itemRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemTitle} numberOfLines={1}>{a.caption || a.image_url}</Text>
+            <Muted style={{ fontSize: 11 }}>
+              {a.is_active ? "Attiva" : "Disattiva"}{a.click_url ? ` · ${a.click_url}` : ""}
+            </Muted>
+          </View>
+          <Pressable onPress={() => toggle(a.id)}>
+            <Text style={{ color: colors.brandPrimary, fontWeight: "700", marginRight: spacing.md }}>
+              {a.is_active ? "Pausa" : "Attiva"}
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => remove(a.id)}>
             <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
           </Pressable>
         </View>

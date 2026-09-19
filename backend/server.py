@@ -9,7 +9,11 @@ from typing import List, Optional
 
 import bcrypt
 import jwt
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query
+import httpx
+import requests
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query, UploadFile, File, Form
+from fastapi.responses import Response
+from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -32,6 +36,14 @@ JWT_TTL_MIN = int(os.environ.get("JWT_TTL_MIN", 43200))
 EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 ADMIN_PHONE = os.environ["ADMIN_PHONE"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+EMERGENT_PUSH_KEY = os.environ.get("EMERGENT_PUSH_KEY", "placeholder")
+INTEGRATION_PROXY_URL = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
+STORAGE_URL = INTEGRATION_PROXY_URL.rstrip("/") + "/objstore/api/v1/storage"
+PUSH_BASE_URL = INTEGRATION_PROXY_URL
+APP_NAME = "conoscenza-aperta"
+
+# Global storage key cache
+_storage_key: Optional[str] = None
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -141,6 +153,25 @@ class SummarizeIn(BaseModel):
 
 class CheckoutIn(BaseModel):
     plan: str  # "3m" | "6m" | "12m"
+    coupon_code: Optional[str] = None
+
+
+class CouponIn(BaseModel):
+    code: str
+    percent_off: int = Field(ge=1, le=100)
+    max_uses: int = Field(ge=1, default=100)
+    expires_at: Optional[str] = None
+
+
+class FavoriteIn(BaseModel):
+    content_id: str
+    content_type: str  # "article" | "media"
+
+
+class RegisterPushBody(BaseModel):
+    user_id: str
+    platform: str
+    device_token: str
 
 
 # ---------------------------------------------------------------------------
@@ -229,6 +260,14 @@ async def startup():
     await db.media.create_index("id", unique=True)
     await db.messages.create_index("id", unique=True)
     await db.views.create_index([("content_id", 1), ("date", 1)])
+    await db.favorites.create_index([("user_id", 1), ("content_id", 1)], unique=True)
+    await db.coupons.create_index("code", unique=True)
+
+    # Init object storage (best-effort)
+    try:
+        await run_in_threadpool(_init_storage_sync)
+    except Exception as e:
+        logger.warning(f"Storage init failed: {e}")
 
     # Seed admin user
     admin_phone = normalize_phone(ADMIN_PHONE)
@@ -371,7 +410,7 @@ async def _seed_demo_content():
             "description": "10 minuti di meditazione guidata per riportare l'attenzione al respiro e al momento presente.",
             "category": "Meditazione",
             "kind": "meditation",
-            "media_url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_1718e6b0a4.mp3",
+            "media_url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
             "thumbnail_url": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
             "duration_sec": 600,
             "is_premium": False,
@@ -391,7 +430,7 @@ async def _seed_demo_content():
             "description": "Sessione avanzata di 25 minuti per accedere agli stati profondi di coscienza.",
             "category": "Meditazione",
             "kind": "meditation",
-            "media_url": "https://cdn.pixabay.com/download/audio/2022/10/18/audio_4dbf9e91b7.mp3",
+            "media_url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
             "thumbnail_url": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
             "duration_sec": 1500,
             "is_premium": True,
@@ -407,8 +446,94 @@ async def _seed_demo_content():
 
 
 # ---------------------------------------------------------------------------
-# Public routes
+# Object Storage helpers
 # ---------------------------------------------------------------------------
+def _init_storage_sync() -> str:
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def _put_object_sync(path: str, data: bytes, content_type: str) -> dict:
+    global _storage_key
+    key = _init_storage_sync()
+    try:
+        resp = requests.put(
+            f"{STORAGE_URL}/objects/{path}",
+            headers={"X-Storage-Key": key, "Content-Type": content_type},
+            data=data,
+            timeout=300,
+        )
+        if resp.status_code == 503:
+            _storage_key = None
+            key = _init_storage_sync()
+            resp = requests.put(
+                f"{STORAGE_URL}/objects/{path}",
+                headers={"X-Storage-Key": key, "Content-Type": content_type},
+                data=data,
+                timeout=300,
+            )
+        resp.raise_for_status()
+    except requests.HTTPError as e:
+        raise HTTPException(e.response.status_code, f"Storage error: {e.response.text[:200]}")
+    return resp.json()
+
+
+def _get_object_sync(path: str) -> tuple[bytes, str]:
+    global _storage_key
+    key = _init_storage_sync()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
+    if resp.status_code == 503:
+        _storage_key = None
+        key = _init_storage_sync()
+        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=120)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+
+
+# ---------------------------------------------------------------------------
+# Push notifications
+# ---------------------------------------------------------------------------
+_push_client = httpx.AsyncClient(
+    base_url=PUSH_BASE_URL,
+    headers={"X-Push-Key": EMERGENT_PUSH_KEY},
+    timeout=10.0,
+)
+
+
+async def send_push_bg(recipients: list, title: str, message: str, action_url: Optional[str] = None):
+    """Fire-and-forget: never blocks the caller."""
+    if not recipients:
+        return
+    try:
+        # chunk to 100 per call
+        for i in range(0, len(recipients), 100):
+            chunk = recipients[i : i + 100]
+            data = {"title": title, "message": message}
+            if action_url:
+                data["action_url"] = action_url
+            resp = await _push_client.post(
+                "/api/v1/push/trigger",
+                json={"recipients": chunk, "data": data},
+            )
+            if resp.status_code >= 400:
+                logger.warning(f"Push trigger returned {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"Push send failed (non-blocking): {e}")
+
+
+async def _all_user_ids(exclude: Optional[str] = None) -> list:
+    ids = []
+    async for u in db.users.find({}, {"_id": 0, "id": 1}):
+        if u["id"] != exclude:
+            ids.append(u["id"])
+    return ids
+
+
 @api.get("/")
 async def root():
     return {"app": "Conoscenza Aperta", "version": "1.0"}
@@ -551,7 +676,8 @@ async def summarize_and_create(inp: SummarizeIn):
             session_id=str(uuid.uuid4()),
             system_message=(
                 "Sei un editor esperto di crescita personale, spiritualità e discipline olistiche. "
-                "Riassumi l'articolo fornito in italiano in massimo 25 righe, in modo semplice, divulgativo e ispirante. "
+                "Riassumi l'articolo fornito in italiano, in modo semplice, divulgativo e ispirante. "
+                "L'articolo finale deve essere lungo fino a 60 righe (circa 500-700 parole), ben strutturato in paragrafi. "
                 "Rispondi in JSON con esattamente questi campi: {\"title\": \"...\", \"summary\": \"...\"}. Nessun altro testo."
             ),
         ).with_model("openai", "gpt-4o-mini")
@@ -850,6 +976,130 @@ async def list_orders():
         u = await db.users.find_one({"id": o["user_id"]}, {"_id": 0, "phone": 1, "name": 1})
         items.append({**o, "user_phone": (u or {}).get("phone", ""), "user_name": (u or {}).get("name", "")})
     return {"items": items}
+
+
+# ---------------------------------------------------------------------------
+# YouTube channel import
+# ---------------------------------------------------------------------------
+class YoutubeImportIn(BaseModel):
+    channel_url: str
+    category: str = "Video"
+    is_premium: bool = False
+
+
+@api.post("/admin/media/import-youtube", dependencies=[Depends(require_admin)])
+async def import_youtube_channel(inp: YoutubeImportIn):
+    if inp.category not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20, headers={"User-Agent": "Mozilla/5.0"}) as h:
+            r = await h.get(inp.channel_url)
+            r.raise_for_status()
+        m = re.search(r'"externalId":"(UC[\w-]+)"', r.text) or re.search(r'/channel/(UC[\w-]+)', r.text)
+        if not m:
+            raise HTTPException(400, "Impossibile trovare il canale YouTube")
+        channel_id = m.group(1)
+        async with httpx.AsyncClient(timeout=20) as h:
+            rss = await h.get(f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}")
+            rss.raise_for_status()
+        feed = rss.text
+        vids = re.findall(r"<yt:videoId>([^<]+)</yt:videoId>", feed)
+        titles = re.findall(r"<media:title>([^<]+)</media:title>", feed)
+        thumbs = re.findall(r'<media:thumbnail url="([^"]+)"', feed)
+        descs = re.findall(r"<media:description>([^<]*)</media:description>", feed, re.S)
+
+        imported = 0
+        skipped = 0
+        for i, vid in enumerate(vids):
+            url = f"https://www.youtube.com/watch?v={vid}"
+            # skip duplicates
+            if await db.media.find_one({"media_url": url}):
+                skipped += 1
+                continue
+            title = titles[i] if i < len(titles) else f"Video {vid}"
+            thumb = thumbs[i] if i < len(thumbs) else f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+            desc = (descs[i] if i < len(descs) else "").strip()[:800]
+            await db.media.insert_one({
+                "id": str(uuid.uuid4()),
+                "title": title,
+                "description": desc,
+                "category": inp.category,
+                "kind": "video",
+                "media_url": url,
+                "thumbnail_url": thumb,
+                "duration_sec": None,
+                "is_premium": inp.is_premium,
+                "views": 0,
+                "created_at": now_iso(),
+            })
+            imported += 1
+        return {"imported": imported, "skipped": skipped, "total": len(vids), "channel_id": channel_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("YouTube import failed")
+        raise HTTPException(500, f"Errore import: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Ads
+# ---------------------------------------------------------------------------
+class AdIn(BaseModel):
+    image_url: str
+    click_url: Optional[str] = None
+    caption: Optional[str] = None
+    is_active: bool = True
+
+
+@api.get("/ads/active")
+async def get_active_ads(user: dict = Depends(current_user)):
+    """Return currently active ads. Frontend rotates through them."""
+    cursor = db.ads.find({"is_active": True}, {"_id": 0}).sort("created_at", -1)
+    items = []
+    async for a in cursor:
+        items.append({
+            "id": a["id"],
+            "image_url": a["image_url"],
+            "click_url": a.get("click_url"),
+            "caption": a.get("caption"),
+        })
+    return {"items": items}
+
+
+@api.post("/admin/ads", dependencies=[Depends(require_admin)])
+async def create_ad(inp: AdIn):
+    doc = {
+        "id": str(uuid.uuid4()),
+        **inp.dict(),
+        "created_at": now_iso(),
+    }
+    await db.ads.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.get("/admin/ads", dependencies=[Depends(require_admin)])
+async def list_ads():
+    cursor = db.ads.find({}, {"_id": 0}).sort("created_at", -1)
+    items = []
+    async for a in cursor:
+        items.append(a)
+    return {"items": items}
+
+
+@api.delete("/admin/ads/{ad_id}", dependencies=[Depends(require_admin)])
+async def delete_ad(ad_id: str):
+    r = await db.ads.delete_one({"id": ad_id})
+    return {"deleted": r.deleted_count}
+
+
+@api.post("/admin/ads/{ad_id}/toggle", dependencies=[Depends(require_admin)])
+async def toggle_ad(ad_id: str):
+    a = await db.ads.find_one({"id": ad_id}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Ad non trovato")
+    await db.ads.update_one({"id": ad_id}, {"$set": {"is_active": not a.get("is_active", True)}})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

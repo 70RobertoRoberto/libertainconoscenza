@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { LogBox } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
+import { AdOverlay } from "@/src/AdOverlay";
 
 LogBox.ignoreAllLogs(true);
 
@@ -24,6 +25,7 @@ export default function RootLayout() {
             animation: "fade",
           }}
         />
+        <AdOverlay />
       </SafeAreaProvider>
     </QueryClientProvider>
   );
