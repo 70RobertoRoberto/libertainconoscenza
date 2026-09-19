@@ -11,7 +11,7 @@ import bcrypt
 import jwt
 import httpx
 import requests
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query, UploadFile, File, Form, Request
 from fastapi.responses import Response
 from fastapi.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
@@ -986,7 +986,7 @@ async def summarize_and_create(inp: SummarizeIn):
             system_message=(
                 "Sei un editor esperto di crescita personale, spiritualità e discipline olistiche. "
                 "Riassumi l'articolo fornito in italiano, in modo semplice, divulgativo e ispirante. "
-                "L'articolo finale deve essere lungo fino a 60 righe (circa 500-700 parole), ben strutturato in paragrafi. "
+                "L'articolo finale deve essere lungo fino a 80 righe (circa 700-900 parole), ben strutturato in paragrafi separati da doppio a-capo. "
                 "Rispondi in JSON con esattamente questi campi: {\"title\": \"...\", \"summary\": \"...\"}. Nessun altro testo."
             ),
         ).with_model("openai", "gpt-4o-mini")
@@ -1473,6 +1473,91 @@ async def list_orders():
         u = await db.users.find_one({"id": o["user_id"]}, {"_id": 0, "phone": 1, "name": 1})
         items.append({**o, "user_phone": (u or {}).get("phone", ""), "user_name": (u or {}).get("name", "")})
     return {"items": items}
+
+
+# ---------------------------------------------------------------------------
+# Public share pages with OpenGraph meta (for WhatsApp / Telegram preview)
+# ---------------------------------------------------------------------------
+def _og_html(title: str, description: str, image: str, url: str) -> str:
+    def esc(s: str) -> str:
+        return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    title_e = esc(title)
+    desc_e = esc((description or "")[:280])
+    return f"""<!doctype html>
+<html lang=\"it\">
+<head>
+<meta charset=\"utf-8\"/>
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
+<title>{title_e} — Conoscenza Aperta</title>
+<meta name=\"description\" content=\"{desc_e}\"/>
+<meta property=\"og:type\" content=\"article\"/>
+<meta property=\"og:site_name\" content=\"Conoscenza Aperta\"/>
+<meta property=\"og:title\" content=\"{title_e}\"/>
+<meta property=\"og:description\" content=\"{desc_e}\"/>
+<meta property=\"og:image\" content=\"{esc(image)}\"/>
+<meta property=\"og:image:width\" content=\"800\"/>
+<meta property=\"og:image:height\" content=\"600\"/>
+<meta property=\"og:url\" content=\"{esc(url)}\"/>
+<meta name=\"twitter:card\" content=\"summary_large_image\"/>
+<meta name=\"twitter:title\" content=\"{title_e}\"/>
+<meta name=\"twitter:description\" content=\"{desc_e}\"/>
+<meta name=\"twitter:image\" content=\"{esc(image)}\"/>
+<style>
+  body{{font-family:Georgia,'Times New Roman',serif;background:#0A0F0D;color:#F0F0EA;margin:0;padding:0;}}
+  .wrap{{max-width:720px;margin:0 auto;padding:24px;}}
+  .brand{{color:#D4AF37;letter-spacing:4px;font-size:12px;text-align:center;margin-bottom:8px;}}
+  img{{width:100%;height:auto;border-radius:14px;margin:16px 0;}}
+  h1{{color:#F0F0EA;font-weight:400;font-size:32px;line-height:1.25;}}
+  .cat{{color:#B38B4D;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}}
+  p{{color:#E0E0D5;font-size:17px;line-height:1.7;white-space:pre-wrap;}}
+  a.cta{{display:inline-block;margin-top:24px;padding:14px 24px;background:#D4AF37;color:#0A0F0D;border-radius:999px;text-decoration:none;font-weight:700;}}
+</style>
+</head>
+<body>
+<div class=\"wrap\">
+  <div class=\"brand\">CONOSCENZA APERTA</div>
+  <h1>{title_e}</h1>
+  <img src=\"{esc(image)}\" alt=\"{title_e}\"/>
+  <p>{desc_e}</p>
+  <a class=\"cta\" href=\"{esc(url)}\">Apri nell'app</a>
+</div>
+</body></html>"""
+
+
+PUBLIC_HOST_ENV = os.environ.get("PUBLIC_HOST", "")
+
+
+def _public_base_url(request) -> str:
+    """Best-effort external URL that WhatsApp/Telegram can reach."""
+    if PUBLIC_HOST_ENV:
+        return PUBLIC_HOST_ENV.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", "https")
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost"
+    return f"{proto}://{host}"
+
+
+@api.get("/share/article/{article_id}")
+async def share_article_page(article_id: str, request: Request):
+    a = await db.articles.find_one({"id": article_id}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Non trovato")
+    base = _public_base_url(request)
+    image = a.get("image_url") or f"{base}/api/share/placeholder.png"
+    url = f"{base}/api/share/article/{article_id}"
+    html = _og_html(a["title"], a.get("summary", ""), image, url)
+    return Response(content=html, media_type="text/html; charset=utf-8")
+
+
+@api.get("/share/media/{media_id}")
+async def share_media_page(media_id: str, request: Request):
+    m = await db.media.find_one({"id": media_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "Non trovato")
+    base = _public_base_url(request)
+    image = m.get("thumbnail_url") or f"{base}/api/share/placeholder.png"
+    url = f"{base}/api/share/media/{media_id}"
+    html = _og_html(m["title"], m.get("description", ""), image, url)
+    return Response(content=html, media_type="text/html; charset=utf-8")
 
 
 # ---------------------------------------------------------------------------

@@ -77,12 +77,14 @@ export default function ArticleDetail() {
     );
   }
 
-  const shareText = `${data.title}\n\n${data.summary}\n\n— da Conoscenza Aperta`;
+  const backendBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+  const shareUrl = `${backendBase}/api/share/article/${data.id}`;
+  const shareText = `${data.title}\n\n${shareUrl}\n\n— da Conoscenza Aperta`;
   const shareWA = () =>
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(shareText)}`);
   const shareTG = () =>
     Linking.openURL(
-      `https://t.me/share/url?url=${encodeURIComponent(data.source_url || "")}&text=${encodeURIComponent(shareText)}`,
+      `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(data.title)}`,
     );
 
   return (

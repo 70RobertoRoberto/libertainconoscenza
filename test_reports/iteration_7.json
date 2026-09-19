@@ -1,0 +1,43 @@
+{
+  "summary": "Iteration 7 – validated the 3 bug fixes on Conoscenza Aperta (article length, missing images, WhatsApp/Telegram OG share) plus a targeted regression sweep. Backend: 14/14 pytest pass in test_iteration7_share_and_length.py. Frontend: article detail page for 'Biofisica quantistica' loads with the new Unsplash image (photo id 1635070041078), summary of 2318 chars containing 'Fritz-Albert Popp', 'Emilio Del Giudice', 'biofotoni', and 'coerenza', and both WhatsApp/Telegram share buttons render pinned at the bottom (testID share-wa / share-tg). Bug 1: every seed article now has summary >= 1500 chars; the shortest is Biofisica at ~2318 chars, all 13 titles migrated. Bug 2: every article returns a non-empty image_url; both Fisica quantistica articles carry the new working Unsplash URL. Bug 3: GET /api/share/article/{id} and /api/share/media/{id} return text/html with og:title, og:description, og:image, og:url, og:type=article, twitter:card=summary_large_image, twitter:image — verified against real IDs. Regression stable: /search?q=medita 200, /me/stats returns expected shape (uses 'minutes_meditated' not 'minutes' — noted for future tests), /referrals/me = MAESTRO-2026 for admin, /favorites/toggle 200 with {content_type, content_id}, SoundHelix URLs still on meditation media, admin login OK. No React Native red screens, no deprecated Expo packages, only the harmless expo-notifications web warning.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration7_share_and_length.py",
+    "/app/test_reports/pytest/iteration_7.xml"
+  ],
+  "action_items": [
+    "No bug fixes needed — all 3 reported bugs are verified fixed and regression is green.",
+    "Optional (not blocking): OG share page currently renders og:type='article' also for media share URLs; if strict semantics matter, switch to og:type='video.other' inside share_media_page.",
+    "Optional: /me/stats field is 'minutes_meditated' but iteration_6 summary described it as 'minutes' — align docs/UI copy for consistency."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1481-1524 _og_html properly HTML-escapes title/description/image/url — safe against XSS via seed content.",
+    "server.py:1530-1536 _public_base_url falls back to Host header if X-Forwarded-* is missing — good, but the PUBLIC_HOST env override is a nice escape hatch for CDN cases.",
+    "server.py:1539-1560 share endpoints correctly exclude _id via projection and 404 for unknown ids.",
+    "migrate_articles.py leaves seed data idempotent (upsert-style set on match by title/category) — safe to re-run, though instructions say do not.",
+    "server.py still ~1764 lines (>700 guideline) — future refactor into routers/ (share/, admin/, billing/, content/) recommended but not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration7_share_and_length.py",
+    "/app/test_reports/iteration_7.json",
+    "/app/test_reports/pytest/iteration_7.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14)",
+    "frontend": "100% (article detail + share buttons + OG page all verified)"
+  },
+  "seed_data_creation": "None. Did not re-run migrate_articles.py (per instructions). Did not create any new users, coupons, articles, media or messages in this iteration. Toggled a favorite on/off for admin against the first article for the regression check — leaves state clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 7 tests live at /app/backend/tests/test_iteration7_share_and_length.py — reuse the fixtures. Notes on real contracts (differ from earlier iteration notes): login response field is 'access_token' (not 'token'); /api/articles requires auth and returns {'items': [...]}; /api/media?kind=meditation returns {'items': [...]} with 'media_url' field; /api/favorites/toggle payload is {content_type, content_id} (NOT {kind,id}); /api/me/stats returns 'minutes_meditated' (not 'minutes'). Share endpoints: GET /api/share/article/{id} and /api/share/media/{id} — public, no auth, return text/html with full OG + twitter:card meta; 404 for unknown id. Frontend testIDs verified on article detail: share-wa, share-tg. Article page URL: /article/{id} on Expo Router web. Preview host: https://integral-wellness-2.preview.emergentagent.com. Biofisica article id used in checks: f03b3dbe-54fe-4901-928a-f8a75f5090b3 (may change on re-seed). No packages installed, no code changes.",
+  "rca_of_issue": "N/A — all three reported bugs are fixed and validated end-to-end. Fixes recap: (1) migration set 13 seeded articles to summaries of ~2300 chars each (Italian narrative prose of 60–80 lines); (2) migration force-sets image_url on Fisica quantistica to https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=800 and fills any missing image with a category fallback; (3) new /api/share/article/{id} and /api/share/media/{id} return an HTML page with full OpenGraph + twitter:card meta so WhatsApp/Telegram render a card preview with the article image; frontend article/[id].tsx builds https://<host>/api/share/article/<id> and opens https://wa.me/?text=... or https://t.me/share/url?url=... — both call sites correctly encode the share URL."
+}
