@@ -1,0 +1,185 @@
+{
+  "app_name": "Conoscenza Aperta",
+  "personality": "6 Glass / Luxe DARK infused with 3 Editorial typography",
+  "personality_one_liner": "A sacred, elegant spiritual sanctuary utilizing editorial-grade serif typography, deep mystic surfaces, and golden accents to foster profound personal growth.",
+  "color": {
+    "surface": "#0A0F0D",
+    "onSurface": "#F0F0EA",
+    "surfaceSecondary": "#151E1A",
+    "onSurfaceSecondary": "#E0E0D5",
+    "surfaceTertiary": "#1B2621",
+    "onSurfaceTertiary": "#C5C5B5",
+    "surfaceInverse": "#F0F0EA",
+    "onSurfaceInverse": "#0A0F0D",
+    "brand": "#C5A059",
+    "brandPrimary": "#D4AF37",
+    "onBrandPrimary": "#0A0F0D",
+    "brandSecondary": "#B38B4D",
+    "onBrandSecondary": "#F0F0EA",
+    "brandTertiary": "#2C2B22",
+    "onBrandTertiary": "#D4AF37",
+    "success": "#2D5D42",
+    "onSuccess": "#E3F0E8",
+    "warning": "#8A6722",
+    "onWarning": "#F5EBCE",
+    "error": "#7A2D2D",
+    "onError": "#F2E1E1",
+    "info": "#2D485D",
+    "onInfo": "#E1EDF5",
+    "border": "#222D28",
+    "borderStrong": "#3A4740",
+    "divider": "#1F2925",
+    "muted": "#88948E",
+    "onBrand": "#0A0F0D"
+  },
+  "typography": {
+    "displayFontFamily": "Cormorant Garamond",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous, editorial-style breathing room. Let typography and content breathe. Never dense.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Apply to sticky headers, bottom tab bar, and bottom sheet drag handles.",
+      "Use over deep atmospheric background images for featured article cards."
+    ],
+    "dont's": [
+      "Do not apply to body text regions, standard lists, or reading view content."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding & Auth",
+      "purpose": "Introduce the spiritual sanctuary and authenticate the user via phone and password.",
+      "states": {
+        "loading": "Subtle golden spinner centered on dark background.",
+        "empty": "N/A",
+        "error": "Elegant toast with red accent and minimal text."
+      },
+      "layout": "Full-bleed dark atmospheric background. The logo sits prominently centered. A refined glass bottom sheet slides up for the phone/password input. Inputs are clean, single-column, with labels above."
+    },
+    {
+      "name": "Home",
+      "purpose": "Discover articles, administrative posts, and daily divulgative content.",
+      "states": {
+        "loading": "Skeleton text blocks matching the editorial layout.",
+        "empty": "Icon of a serene tree with 'New wisdom will arrive soon.'",
+        "error": "Readable message on dark surface with a Retry button."
+      },
+      "layout": "Editorial reading layout. A large hero article card at the top utilizing a dark nature image with a gradient scrim and a large serif title. Below it, a segmented control or horizontal chip list for categories. Articles appear in a vertical list with large serif typography and generous line height. Tab bar features a glass background."
+    },
+    {
+      "name": "Library / Categories",
+      "purpose": "Browse the extensive list of disciplines (Quantum physics, Meditation, etc.) and Video content.",
+      "states": {
+        "loading": "Skeleton cards.",
+        "empty": "Serene abstract imagery.",
+        "error": "Error text with reload action."
+      },
+      "layout": "A 2-column grid of cards. Each card uses abstract, dark spiritual or nature imagery (e.g., forest, quantum visuals) overlaid with a 70% black-to-transparent gradient scrim and a serif title in the bottom left corner."
+    },
+    {
+      "name": "Article Detail",
+      "purpose": "Provide a distraction-free, elegant reading experience mimicking high-end literary magazines.",
+      "states": {
+        "loading": "Fading skeleton lines.",
+        "empty": "N/A",
+        "error": "Text error state."
+      },
+      "layout": "Content-first approach. Large serif headline, subtle gold accents, and a strict reading measure (padding on sides). Muted off-white text for body to reduce eye strain. Share buttons (Telegram/WhatsApp) are anchored in a sticky glass bottom bar."
+    },
+    {
+      "name": "Paywall / Subscription",
+      "purpose": "Convert users to the advanced paid area with 3/6/12 months courses access.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "N/A",
+        "error": "Error message."
+      },
+      "layout": "High-leverage product surface. Outcome-led headline ('Unlock Ancient Wisdom'). Displays pricing tiers with the 12-month annual plan visually badged ('Best Value') and pre-selected. Single, full-width sticky golden CTA button at the bottom. Features 3-5 skimmable benefits with golden checkmarks."
+    },
+    {
+      "name": "Messages / Inbox",
+      "purpose": "View personal messages and community updates from the admin.",
+      "states": {
+        "loading": "Skeleton rows.",
+        "empty": "An elegant illustration of a closed letter with 'Your inbox is quiet.'",
+        "error": "Retry state."
+      },
+      "layout": "Clean, unboxed vertical list of message rows. Each row features a subtle unread indicator (a golden dot), a serif sender name ('Admin'), a truncated preview, and a timestamp."
+    }
+  ],
+  "images": {
+    "logo_placeholder": {
+      "url": "https://images.pexels.com/photos/30310074/pexels-photo-30310074.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Golden mandala logo"
+    },
+    "meditation_hero": {
+      "url": "https://images.unsplash.com/photo-1636794369713-f3eb3c8a3535?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHx6ZW4lMjBtZWRpdGF0aW9uJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzg5ODMwMzE2fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Zen meditation dark background"
+    },
+    "quantum_physics": {
+      "url": "https://images.pexels.com/photos/38032287/pexels-photo-38032287.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Abstract visualization of blue magnetic field lines"
+    },
+    "dark_forest": {
+      "url": "https://images.unsplash.com/photo-1612703508477-00e02a9b170c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxjYWxtJTIwZGFyayUyMGZvcmVzdCUyMG5hdHVyZXxlbnwwfHx8fDE3ODk4MzAzMTZ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Dark mysterious forest"
+    },
+    "spiritual_light": {
+      "url": "https://images.unsplash.com/photo-1588406320565-9fa6d9901d1d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxzcGlyaXR1YWwlMjBsaWdodCUyMHJheXxlbnwwfHx8fDE3ODk4MzAzMTZ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Spiritual light rays shining through trees"
+    },
+    "philosophy": {
+      "url": "https://images.unsplash.com/photo-1600181982553-ce7d36051c01?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1OTN8MHwxfHNlYXJjaHwxfHxvbGQlMjBwaGlsb3NvcGh5JTIwYm9vayUyMGRhcmt8ZW58MHx8fHwxNzg5ODMwMzE2fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Old vintage philosophy books in dark setting"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly adhere to the dark mystic color palette (Midnight/Forest Green base '#0A0F0D'). Do not use ANY shades of blue or purple, as requested in the design rules.",
+    "Implement an elegant typographic hierarchy using Cormorant Garamond (or Playfair Display) for all headings/titles and Geist (or Satoshi) for body text.",
+    "For the reading view (Article Detail), emulate a high-end literary magazine: use muted off-white text against the dark background, ensure generous line-height (1.5x), and restrict text width with horizontal padding for optimal readability.",
+    "When rendering the logo provided by the user (white background with gold accents), enclose the `Image` component within a solid white circular container with `overflow: 'hidden'` so it pops cleanly against the dark app theme without ugly square corners.",
+    "Apply a vertical linear gradient scrim (from transparent down to ≥80% `surfaceInverse` or `surface`) over ALL background images (like category cards and hero images) to ensure overlaid text remains WCAG readable.",
+    "The Subscription Paywall should default to selecting the 12-month option, highlight it visually with a 'Best Value' golden tag, and use a sticky full-width golden CTA button.",
+    "Use Phosphor icons consistently. Stick to a single weight (e.g., thin or regular) to maintain the elegant, refined aesthetic.",
+    "Add subtle haptic feedback for key interactions (e.g., category selection, opening an article, pressing the golden CTA)."
+  ]
+}

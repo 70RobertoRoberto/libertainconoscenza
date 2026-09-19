@@ -1,0 +1,871 @@
+"""Conoscenza Aperta - FastAPI backend."""
+import os
+import re
+import uuid
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+
+import bcrypt
+import jwt
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query
+from starlette.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field
+
+ROOT_DIR = Path(__file__).parent
+load_dotenv(ROOT_DIR / ".env")
+
+# ---------------------------------------------------------------------------
+# Setup
+# ---------------------------------------------------------------------------
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("conoscenza")
+
+MONGO_URL = os.environ["MONGO_URL"]
+DB_NAME = os.environ["DB_NAME"]
+JWT_SECRET = os.environ["JWT_SECRET"]
+JWT_ISSUER = os.environ["JWT_ISSUER"]
+JWT_TTL_MIN = int(os.environ.get("JWT_TTL_MIN", 43200))
+EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
+ADMIN_PHONE = os.environ["ADMIN_PHONE"]
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+
+client = AsyncIOMotorClient(MONGO_URL)
+db = client[DB_NAME]
+
+app = FastAPI(title="Conoscenza Aperta API")
+api = APIRouter(prefix="/api")
+
+CATEGORIES = [
+    "Crescita personale",
+    "Spirituale",
+    "Fisica quantistica",
+    "Meditazione",
+    "Discipline orientali",
+    "Naturopatia",
+    "Psicologia",
+    "Medicina Integrata",
+    "Filosofia",
+    "Nutrizione",
+    "Somatognostica",
+    "Video",
+]
+
+PLANS = {
+    "3m": {"months": 3, "price_eur": 300, "label": "3 Mesi"},
+    "6m": {"months": 6, "price_eur": 500, "label": "6 Mesi"},
+    "12m": {"months": 12, "price_eur": 900, "label": "12 Mesi"},
+}
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+class RegisterIn(BaseModel):
+    phone: str
+    password: str = Field(min_length=6, max_length=128)
+    name: Optional[str] = None
+
+
+class LoginIn(BaseModel):
+    phone: str
+    password: str
+
+
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: dict
+
+
+class ArticleIn(BaseModel):
+    title: str
+    summary: str
+    category: str
+    source_url: Optional[str] = None
+    image_url: Optional[str] = None
+    is_premium: bool = False
+
+
+class ArticleOut(BaseModel):
+    id: str
+    title: str
+    summary: str
+    category: str
+    source_url: Optional[str] = None
+    image_url: Optional[str] = None
+    is_premium: bool
+    views: int
+    created_at: str
+
+
+class MediaIn(BaseModel):
+    title: str
+    description: str = ""
+    category: str
+    kind: str  # "video" or "meditation"
+    media_url: str  # external link or storage URL
+    thumbnail_url: Optional[str] = None
+    duration_sec: Optional[int] = None
+    is_premium: bool = False
+
+
+class MediaOut(BaseModel):
+    id: str
+    title: str
+    description: str
+    category: str
+    kind: str
+    media_url: str
+    thumbnail_url: Optional[str] = None
+    duration_sec: Optional[int] = None
+    is_premium: bool
+    views: int
+    created_at: str
+
+
+class MessageIn(BaseModel):
+    title: str
+    body: str
+    target_user_id: Optional[str] = None  # None = broadcast
+
+
+class SummarizeIn(BaseModel):
+    url: str
+    category: str
+    is_premium: bool = False
+
+
+class CheckoutIn(BaseModel):
+    plan: str  # "3m" | "6m" | "12m"
+
+
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
+def normalize_phone(p: str) -> str:
+    p = re.sub(r"[\s().\-]", "", p or "")
+    if p.startswith("00"):
+        p = "+" + p[2:]
+    if not p.startswith("+"):
+        # assume Italy
+        if p.startswith("3") and len(p) in (9, 10):
+            p = "+39" + p
+        else:
+            p = "+" + p
+    if not re.fullmatch(r"\+\d{8,15}", p):
+        raise HTTPException(400, "Numero di telefono non valido")
+    return p
+
+
+def hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode(), bcrypt.gensalt(rounds=10)).decode()
+
+
+def check_password(pw: str, h: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode(), h.encode())
+    except Exception:
+        return False
+
+
+def make_token(user_id: str) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "iss": JWT_ISSUER,
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(minutes=JWT_TTL_MIN)).timestamp()),
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+
+async def current_user(authorization: str = Header(default="")) -> dict:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Missing token")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = jwt.decode(token, JWT_SECRET, algorithms=["HS256"], issuer=JWT_ISSUER)
+    except Exception:
+        raise HTTPException(401, "Invalid token")
+    uid = claims.get("sub")
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(401, "User not found")
+    return user
+
+
+async def require_admin(user: dict = Depends(current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(403, "Admin required")
+    return user
+
+
+def to_public_user(u: dict) -> dict:
+    return {
+        "id": u["id"],
+        "phone": u["phone"],
+        "name": u.get("name"),
+        "is_admin": u.get("is_admin", False),
+        "subscription": u.get("subscription", {"status": "free"}),
+    }
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Startup
+# ---------------------------------------------------------------------------
+@app.on_event("startup")
+async def startup():
+    await db.users.create_index("phone", unique=True)
+    await db.users.create_index("id", unique=True)
+    await db.articles.create_index("id", unique=True)
+    await db.media.create_index("id", unique=True)
+    await db.messages.create_index("id", unique=True)
+    await db.views.create_index([("content_id", 1), ("date", 1)])
+
+    # Seed admin user
+    admin_phone = normalize_phone(ADMIN_PHONE)
+    existing = await db.users.find_one({"phone": admin_phone})
+    if not existing:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()),
+            "phone": admin_phone,
+            "password_hash": hash_password(ADMIN_PASSWORD),
+            "name": "Amministratore",
+            "is_admin": True,
+            "subscription": {"status": "premium", "plan": "12m", "expires_at": None},
+            "created_at": now_iso(),
+        })
+        logger.info(f"Admin seeded: {admin_phone}")
+    else:
+        # Ensure admin flag and reset password (idempotent)
+        await db.users.update_one(
+            {"phone": admin_phone},
+            {"$set": {
+                "is_admin": True,
+                "password_hash": hash_password(ADMIN_PASSWORD),
+                "subscription": {"status": "premium", "plan": "12m", "expires_at": None},
+            }},
+        )
+
+    # Seed demo articles if empty
+    count = await db.articles.count_documents({})
+    if count == 0:
+        await _seed_demo_content()
+
+
+async def _seed_demo_content():
+    """Seed initial content from the 3 websites (AI-style summaries)."""
+    demo_articles = [
+        {
+            "title": "Il potere del respiro consapevole",
+            "summary": "Il respiro consapevole è la porta d'accesso al momento presente. Le antiche tradizioni orientali, dallo yoga al pranayama, insegnano che modulare il ritmo respiratorio calma il sistema nervoso e riequilibra corpo e mente. Bastano pochi minuti al giorno di respirazione profonda diaframmatica per ridurre lo stress, migliorare la concentrazione e aumentare l'energia vitale. Il respiro è ponte tra volontario e involontario, tra materia e coscienza.",
+            "category": "Meditazione",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1636794369713-f3eb3c8a3535?w=800",
+        },
+        {
+            "title": "Biofisica quantistica: la nuova frontiera della salute",
+            "summary": "La biofisica quantistica studia i fenomeni sub-atomici che regolano la vita a livello cellulare. Ricerche recenti mostrano che le cellule comunicano tramite biofotoni, particelle di luce debolissime emesse dal DNA. Questo modello supera la visione puramente biochimica e apre la strada a terapie basate su frequenze, campi elettromagnetici coerenti e informazione. La malattia diventa un disordine informazionale prima che biochimico.",
+            "category": "Fisica quantistica",
+            "source_url": "https://www.scienzebiofisiche.it/",
+            "image_url": "https://images.pexels.com/photos/38032287/pexels-photo-38032287.png?w=800",
+        },
+        {
+            "title": "Somatognostica: conoscere sé stessi attraverso il corpo",
+            "summary": "La Somatognostica è una disciplina che unisce psicologia, filosofia e discipline corporee per accedere alla conoscenza di sé attraverso l'ascolto del corpo. Ogni tensione, ogni postura racconta una storia personale non narrata. Portando consapevolezza alle sensazioni somatiche si sciolgono blocchi emotivi profondi e si integrano parti dimenticate del sé. Il corpo diventa maestro e testimone del processo di individuazione.",
+            "category": "Somatognostica",
+            "source_url": "https://www.somatognostica.it/",
+            "image_url": "https://images.unsplash.com/photo-1588406320565-9fa6d9901d1d?w=800",
+        },
+        {
+            "title": "L'alchimia interiore secondo la tradizione ermetica",
+            "summary": "L'alchimia non è solo trasmutazione di metalli ma anche opera di trasformazione interiore. La tradizione ermetica descrive tre fasi: nigredo (dissoluzione dell'ego), albedo (purificazione), rubedo (integrazione dell'oro spirituale). Ogni fase corrisponde a una crisi esistenziale che, se attraversata con coscienza, conduce a una nuova nascita. L'oro alchemico è la coscienza risvegliata.",
+            "category": "Spirituale",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1600181982553-ce7d36051c01?w=800",
+        },
+        {
+            "title": "Naturopatia: la forza vitale come principio guaritore",
+            "summary": "La naturopatia si basa sulla vis medicatrix naturae, la forza guaritrice della natura presente in ogni organismo. Non combatte il sintomo ma sostiene l'organismo nel ritrovare l'equilibrio. Fitoterapia, idroterapia, alimentazione consapevole e riflessologia sono strumenti che stimolano l'autoguarigione. Il naturopata è un facilitatore, non un guaritore: lavora con la natura, non contro.",
+            "category": "Naturopatia",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1612703508477-00e02a9b170c?w=800",
+        },
+        {
+            "title": "Meditazione mindfulness: la scienza del presente",
+            "summary": "La mindfulness, radicata nel buddhismo Theravada, è oggi validata da centinaia di studi neuroscientifici. Praticare 20 minuti al giorno modifica la struttura cerebrale: aumenta la materia grigia nell'ippocampo (memoria) e riduce l'amigdala (paura). La mindfulness non è svuotare la mente ma osservare pensieri e sensazioni senza giudicarli, coltivando presenza e accettazione radicale.",
+            "category": "Meditazione",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
+        },
+        {
+            "title": "Il campo morfogenetico e la memoria della natura",
+            "summary": "Rupert Sheldrake ha proposto l'esistenza di campi morfogenetici, strutture informazionali non locali che guidano lo sviluppo di ogni forma vivente. Questi campi contengono la memoria della specie e si aggiornano con l'esperienza collettiva. Applicato alla salute umana, questo modello spiega la trasmissione trans-generazionale di traumi e abilità. La natura ricorda, e noi siamo parte di questa memoria vivente.",
+            "category": "Fisica quantistica",
+            "source_url": "https://www.scienzebiofisiche.it/",
+            "image_url": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
+        },
+        {
+            "title": "Yoga e le otto membra di Patanjali",
+            "summary": "Gli Yoga Sutra di Patanjali descrivono l'ashtanga, gli otto rami dello yoga: yama (etica), niyama (disciplina), asana (postura), pranayama (respiro), pratyahara (ritiro sensi), dharana (concentrazione), dhyana (meditazione), samadhi (unione). Non è ginnastica ma un percorso completo di liberazione. Ogni ramo prepara al successivo, culminando nella dissoluzione dell'ego separato.",
+            "category": "Discipline orientali",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=800",
+        },
+        {
+            "title": "Medicina integrata: unire tradizioni per il paziente",
+            "summary": "La medicina integrata unisce il rigore scientifico della biomedicina con la saggezza olistica delle medicine tradizionali. Non è alternativa ma complementare: agopuntura per il dolore cronico, mindfulness per l'ansia, omeopatia per l'autoregolazione. Il paziente al centro, con protocolli personalizzati che considerano corpo, mente e contesto di vita. Il futuro della medicina è integrativo.",
+            "category": "Medicina Integrata",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800",
+        },
+        {
+            "title": "Psicologia analitica: l'ombra e l'individuazione",
+            "summary": "Carl Gustav Jung ha descritto il processo di individuazione come integrazione degli opposti interiori. L'ombra contiene ciò che rifiutiamo di noi: aggressività, paure, desideri censurati. Non integrando l'ombra proiettiamo sugli altri le nostre parti nascoste. Il lavoro analitico è dialogo con l'inconscio attraverso sogni, sincronicità e immaginazione attiva. Divenire sé stessi è opera di una vita.",
+            "category": "Psicologia",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800",
+        },
+        {
+            "title": "Alimentazione consapevole: cibo come informazione",
+            "summary": "Il cibo non è solo carburante ma informazione biochimica ed energetica. Alimenti freschi, di stagione, coltivati con rispetto trasmettono vitalità. La medicina tradizionale cinese classifica i cibi per energia (yin/yang), sapore ed effetto sugli organi. Mangiare consapevolmente significa scegliere, masticare lentamente, riconoscere fame e sazietà. Diventiamo ciò che digeriamo, non solo ciò che mangiamo.",
+            "category": "Nutrizione",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800",
+        },
+        {
+            "title": "Filosofia perenne: l'unità dietro le tradizioni",
+            "summary": "Aldous Huxley coniò l'espressione philosophia perennis per indicare il nucleo comune di tutte le grandi tradizioni sapienziali: la realtà ultima è una, il sé profondo la riflette, e il fine dell'esistenza è realizzare tale unione. Vedanta, Sufismo, misticismo cristiano, buddismo Mahayana convergono su questa intuizione. Le differenze sono di linguaggio, non di sostanza.",
+            "category": "Filosofia",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800",
+        },
+        {
+            "title": "Crescita personale: la responsabilità della propria vita",
+            "summary": "La crescita personale inizia quando smettiamo di dare la colpa al passato o agli altri e assumiamo la piena responsabilità della nostra esperienza. Non significa che siamo la causa di tutto ciò che accade, ma che possiamo scegliere come rispondere. Questa scelta è il seme della libertà. Ogni giorno è occasione per praticare consapevolezza, autenticità e coraggio.",
+            "category": "Crescita personale",
+            "source_url": "https://www.summaaurea.org/category/summa-aurea-generale/",
+            "image_url": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800",
+        },
+    ]
+    for a in demo_articles:
+        await db.articles.insert_one({
+            "id": str(uuid.uuid4()),
+            **a,
+            "is_premium": False,
+            "views": 0,
+            "created_at": now_iso(),
+        })
+
+    demo_media = [
+        {
+            "title": "Meditazione guidata: respiro e presenza",
+            "description": "10 minuti di meditazione guidata per riportare l'attenzione al respiro e al momento presente.",
+            "category": "Meditazione",
+            "kind": "meditation",
+            "media_url": "https://cdn.pixabay.com/download/audio/2022/03/15/audio_1718e6b0a4.mp3",
+            "thumbnail_url": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
+            "duration_sec": 600,
+            "is_premium": False,
+        },
+        {
+            "title": "Introduzione alla Somatognostica",
+            "description": "Video introduttivo sui principi della Somatognostica e sul suo approccio al corpo come veicolo di conoscenza.",
+            "category": "Video",
+            "kind": "video",
+            "media_url": "https://www.youtube.com/watch?v=DWcJFNfaw9c",
+            "thumbnail_url": "https://images.unsplash.com/photo-1588406320565-9fa6d9901d1d?w=800",
+            "duration_sec": 480,
+            "is_premium": False,
+        },
+        {
+            "title": "Meditazione premium: viaggio interiore profondo",
+            "description": "Sessione avanzata di 25 minuti per accedere agli stati profondi di coscienza.",
+            "category": "Meditazione",
+            "kind": "meditation",
+            "media_url": "https://cdn.pixabay.com/download/audio/2022/10/18/audio_4dbf9e91b7.mp3",
+            "thumbnail_url": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
+            "duration_sec": 1500,
+            "is_premium": True,
+        },
+    ]
+    for m in demo_media:
+        await db.media.insert_one({
+            "id": str(uuid.uuid4()),
+            **m,
+            "views": 0,
+            "created_at": now_iso(),
+        })
+
+
+# ---------------------------------------------------------------------------
+# Public routes
+# ---------------------------------------------------------------------------
+@api.get("/")
+async def root():
+    return {"app": "Conoscenza Aperta", "version": "1.0"}
+
+
+@api.get("/categories")
+async def get_categories():
+    return {"categories": CATEGORIES}
+
+
+@api.get("/plans")
+async def get_plans():
+    return {"plans": PLANS}
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+@api.post("/auth/register", response_model=TokenOut)
+async def register(inp: RegisterIn):
+    phone = normalize_phone(inp.phone)
+    if await db.users.find_one({"phone": phone}):
+        raise HTTPException(409, "Numero già registrato")
+    user = {
+        "id": str(uuid.uuid4()),
+        "phone": phone,
+        "password_hash": hash_password(inp.password),
+        "name": inp.name or "",
+        "is_admin": False,
+        "subscription": {"status": "free"},
+        "created_at": now_iso(),
+    }
+    await db.users.insert_one(user)
+    return TokenOut(access_token=make_token(user["id"]), user=to_public_user(user))
+
+
+@api.post("/auth/login", response_model=TokenOut)
+async def login(inp: LoginIn):
+    phone = normalize_phone(inp.phone)
+    u = await db.users.find_one({"phone": phone})
+    if not u or not check_password(inp.password, u["password_hash"]):
+        raise HTTPException(401, "Credenziali non valide")
+    return TokenOut(access_token=make_token(u["id"]), user=to_public_user(u))
+
+
+@api.get("/auth/me")
+async def me(user: dict = Depends(current_user)):
+    return to_public_user(user)
+
+
+# ---------------------------------------------------------------------------
+# Articles
+# ---------------------------------------------------------------------------
+def _serialize_article(a: dict) -> dict:
+    return {
+        "id": a["id"],
+        "title": a["title"],
+        "summary": a["summary"],
+        "category": a["category"],
+        "source_url": a.get("source_url"),
+        "image_url": a.get("image_url"),
+        "is_premium": a.get("is_premium", False),
+        "views": a.get("views", 0),
+        "created_at": a.get("created_at", ""),
+    }
+
+
+@api.get("/articles")
+async def list_articles(
+    category: Optional[str] = None,
+    limit: int = 50,
+    user: dict = Depends(current_user),
+):
+    q = {}
+    if category:
+        q["category"] = category
+    cursor = db.articles.find(q, {"_id": 0}).sort("created_at", -1).limit(limit)
+    items = [_serialize_article(a) async for a in cursor]
+    # Hide premium body for free users? We still show, but frontend gates
+    return {"items": items}
+
+
+@api.get("/articles/{article_id}")
+async def get_article(article_id: str, user: dict = Depends(current_user)):
+    a = await db.articles.find_one({"id": article_id}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Non trovato")
+    # Track view
+    await db.articles.update_one({"id": article_id}, {"$inc": {"views": 1}})
+    await db.views.insert_one({
+        "id": str(uuid.uuid4()),
+        "content_id": article_id,
+        "content_type": "article",
+        "user_id": user["id"],
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "ts": now_iso(),
+    })
+    a["views"] = a.get("views", 0) + 1
+    return _serialize_article(a)
+
+
+@api.post("/admin/articles", dependencies=[Depends(require_admin)])
+async def create_article(inp: ArticleIn):
+    if inp.category not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    doc = {
+        "id": str(uuid.uuid4()),
+        **inp.dict(),
+        "views": 0,
+        "created_at": now_iso(),
+    }
+    await db.articles.insert_one(doc)
+    return _serialize_article(doc)
+
+
+@api.delete("/admin/articles/{article_id}", dependencies=[Depends(require_admin)])
+async def delete_article(article_id: str):
+    r = await db.articles.delete_one({"id": article_id})
+    return {"deleted": r.deleted_count}
+
+
+@api.post("/admin/articles/summarize", dependencies=[Depends(require_admin)])
+async def summarize_and_create(inp: SummarizeIn):
+    """Fetch a URL, extract text, summarize with GPT-5.4-mini, save article."""
+    if inp.category not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    try:
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        import httpx
+        async with httpx.AsyncClient(follow_redirects=True, timeout=20) as h:
+            r = await h.get(inp.url, headers={"User-Agent": "ConoscenzaAperta/1.0"})
+            r.raise_for_status()
+        raw = r.text
+        text = re.sub(r"<script.*?</script>|<style.*?</style>", " ", raw, flags=re.I | re.S)
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = re.sub(r"\s+", " ", text)[:20000]
+
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=str(uuid.uuid4()),
+            system_message=(
+                "Sei un editor esperto di crescita personale, spiritualità e discipline olistiche. "
+                "Riassumi l'articolo fornito in italiano in massimo 25 righe, in modo semplice, divulgativo e ispirante. "
+                "Rispondi in JSON con esattamente questi campi: {\"title\": \"...\", \"summary\": \"...\"}. Nessun altro testo."
+            ),
+        ).with_model("openai", "gpt-4o-mini")
+
+        response = await chat.send_message(UserMessage(text=text))
+        # Try parse JSON
+        import json
+        cleaned = re.sub(r"^```(?:json)?|```$", "", response.strip(), flags=re.M).strip()
+        try:
+            parsed = json.loads(cleaned)
+            title = parsed.get("title", "Articolo")
+            summary = parsed.get("summary", cleaned)
+        except Exception:
+            title = "Articolo sintetizzato"
+            summary = cleaned
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "title": title,
+            "summary": summary,
+            "category": inp.category,
+            "source_url": inp.url,
+            "image_url": None,
+            "is_premium": inp.is_premium,
+            "views": 0,
+            "created_at": now_iso(),
+        }
+        await db.articles.insert_one(doc)
+        return _serialize_article(doc)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Summarize failed")
+        raise HTTPException(500, f"Errore riassunto: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Media (videos + meditations)
+# ---------------------------------------------------------------------------
+def _serialize_media(m: dict) -> dict:
+    return {
+        "id": m["id"],
+        "title": m["title"],
+        "description": m.get("description", ""),
+        "category": m["category"],
+        "kind": m["kind"],
+        "media_url": m["media_url"],
+        "thumbnail_url": m.get("thumbnail_url"),
+        "duration_sec": m.get("duration_sec"),
+        "is_premium": m.get("is_premium", False),
+        "views": m.get("views", 0),
+        "created_at": m.get("created_at", ""),
+    }
+
+
+@api.get("/media")
+async def list_media(
+    kind: Optional[str] = None,
+    category: Optional[str] = None,
+    user: dict = Depends(current_user),
+):
+    q = {}
+    if kind:
+        q["kind"] = kind
+    if category:
+        q["category"] = category
+    cursor = db.media.find(q, {"_id": 0}).sort("created_at", -1)
+    items = [_serialize_media(m) async for m in cursor]
+    return {"items": items}
+
+
+@api.get("/media/{media_id}")
+async def get_media(media_id: str, user: dict = Depends(current_user)):
+    m = await db.media.find_one({"id": media_id}, {"_id": 0})
+    if not m:
+        raise HTTPException(404, "Non trovato")
+    # premium gating
+    if m.get("is_premium") and user.get("subscription", {}).get("status") != "premium":
+        raise HTTPException(402, "Contenuto premium: abbonamento richiesto")
+    await db.media.update_one({"id": media_id}, {"$inc": {"views": 1}})
+    await db.views.insert_one({
+        "id": str(uuid.uuid4()),
+        "content_id": media_id,
+        "content_type": "media",
+        "user_id": user["id"],
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "ts": now_iso(),
+    })
+    m["views"] = m.get("views", 0) + 1
+    return _serialize_media(m)
+
+
+@api.post("/admin/media", dependencies=[Depends(require_admin)])
+async def create_media(inp: MediaIn):
+    if inp.category not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    if inp.kind not in ("video", "meditation"):
+        raise HTTPException(400, "kind deve essere 'video' o 'meditation'")
+    doc = {
+        "id": str(uuid.uuid4()),
+        **inp.dict(),
+        "views": 0,
+        "created_at": now_iso(),
+    }
+    await db.media.insert_one(doc)
+    return _serialize_media(doc)
+
+
+@api.delete("/admin/media/{media_id}", dependencies=[Depends(require_admin)])
+async def delete_media(media_id: str):
+    r = await db.media.delete_one({"id": media_id})
+    return {"deleted": r.deleted_count}
+
+
+# ---------------------------------------------------------------------------
+# Messages (admin -> users)
+# ---------------------------------------------------------------------------
+@api.get("/messages")
+async def list_messages(user: dict = Depends(current_user)):
+    q = {"$or": [{"target_user_id": None}, {"target_user_id": user["id"]}]}
+    cursor = db.messages.find(q, {"_id": 0}).sort("created_at", -1).limit(100)
+    items = []
+    async for m in cursor:
+        items.append({
+            "id": m["id"],
+            "title": m["title"],
+            "body": m["body"],
+            "is_broadcast": m.get("target_user_id") is None,
+            "created_at": m.get("created_at", ""),
+            "read": user["id"] in (m.get("read_by") or []),
+        })
+    return {"items": items}
+
+
+@api.post("/messages/{message_id}/read")
+async def mark_read(message_id: str, user: dict = Depends(current_user)):
+    await db.messages.update_one(
+        {"id": message_id},
+        {"$addToSet": {"read_by": user["id"]}},
+    )
+    return {"ok": True}
+
+
+@api.post("/admin/messages", dependencies=[Depends(require_admin)])
+async def send_message(inp: MessageIn):
+    doc = {
+        "id": str(uuid.uuid4()),
+        "title": inp.title,
+        "body": inp.body,
+        "target_user_id": inp.target_user_id,
+        "read_by": [],
+        "created_at": now_iso(),
+    }
+    await db.messages.insert_one(doc)
+    return {
+        "id": doc["id"],
+        "title": doc["title"],
+        "body": doc["body"],
+        "is_broadcast": inp.target_user_id is None,
+        "created_at": doc["created_at"],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Users (admin)
+# ---------------------------------------------------------------------------
+@api.get("/admin/users", dependencies=[Depends(require_admin)])
+async def list_users():
+    cursor = db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1)
+    items = []
+    async for u in cursor:
+        items.append({
+            "id": u["id"],
+            "phone": u["phone"],
+            "name": u.get("name", ""),
+            "is_admin": u.get("is_admin", False),
+            "subscription": u.get("subscription", {"status": "free"}),
+            "created_at": u.get("created_at", ""),
+        })
+    return {"items": items}
+
+
+# ---------------------------------------------------------------------------
+# Statistics
+# ---------------------------------------------------------------------------
+@api.get("/admin/stats/summary", dependencies=[Depends(require_admin)])
+async def stats_summary():
+    total_users = await db.users.count_documents({})
+    total_articles = await db.articles.count_documents({})
+    total_media = await db.media.count_documents({})
+    total_views = await db.views.count_documents({})
+    premium_users = await db.users.count_documents({"subscription.status": "premium"})
+    return {
+        "users": total_users,
+        "premium_users": premium_users,
+        "articles": total_articles,
+        "media": total_media,
+        "total_views": total_views,
+    }
+
+
+@api.get("/admin/stats/daily", dependencies=[Depends(require_admin)])
+async def stats_daily(days: int = 14):
+    pipeline = [
+        {"$group": {"_id": "$date", "count": {"$sum": 1}}},
+        {"$sort": {"_id": -1}},
+        {"$limit": days},
+    ]
+    result = []
+    async for row in db.views.aggregate(pipeline):
+        result.append({"date": row["_id"], "views": row["count"]})
+    result.reverse()
+    return {"items": result}
+
+
+@api.get("/admin/stats/top-content", dependencies=[Depends(require_admin)])
+async def stats_top_content(limit: int = 20):
+    articles = []
+    async for a in db.articles.find({}, {"_id": 0, "id": 1, "title": 1, "views": 1}).sort("views", -1).limit(limit):
+        articles.append({"id": a["id"], "title": a["title"], "views": a.get("views", 0), "type": "article"})
+    media = []
+    async for m in db.media.find({}, {"_id": 0, "id": 1, "title": 1, "views": 1, "kind": 1}).sort("views", -1).limit(limit):
+        media.append({"id": m["id"], "title": m["title"], "views": m.get("views", 0), "type": m.get("kind", "media")})
+    return {"articles": articles, "media": media}
+
+
+# ---------------------------------------------------------------------------
+# Push tokens
+# ---------------------------------------------------------------------------
+class PushTokenIn(BaseModel):
+    token: str
+    platform: Optional[str] = None
+
+
+@api.post("/me/push-token")
+async def save_push_token(inp: PushTokenIn, user: dict = Depends(current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"push_token": inp.token, "push_platform": inp.platform}},
+    )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Subscription / checkout
+# ---------------------------------------------------------------------------
+@api.post("/billing/checkout")
+async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
+    if inp.plan not in PLANS:
+        raise HTTPException(400, "Piano non valido")
+    plan = PLANS[inp.plan]
+    # For MVP: create a "pending" subscription entry; a real Stripe integration
+    # would return a Checkout Session URL. Admin can activate manually.
+    order = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "plan": inp.plan,
+        "amount_eur": plan["price_eur"],
+        "months": plan["months"],
+        "status": "pending",
+        "created_at": now_iso(),
+    }
+    await db.orders.insert_one(order)
+    return {
+        "order_id": order["id"],
+        "plan": inp.plan,
+        "amount_eur": plan["price_eur"],
+        "status": "pending",
+        "message": "Ordine registrato. Sarà attivato dopo conferma del pagamento.",
+    }
+
+
+@api.post("/admin/orders/{order_id}/activate", dependencies=[Depends(require_admin)])
+async def activate_order(order_id: str):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(404, "Ordine non trovato")
+    expires = datetime.now(timezone.utc) + timedelta(days=30 * order["months"])
+    await db.users.update_one(
+        {"id": order["user_id"]},
+        {"$set": {"subscription": {
+            "status": "premium",
+            "plan": order["plan"],
+            "expires_at": expires.isoformat(),
+        }}},
+    )
+    await db.orders.update_one({"id": order_id}, {"$set": {"status": "active"}})
+    return {"ok": True}
+
+
+@api.get("/admin/orders", dependencies=[Depends(require_admin)])
+async def list_orders():
+    cursor = db.orders.find({}, {"_id": 0}).sort("created_at", -1).limit(200)
+    items = []
+    async for o in cursor:
+        u = await db.users.find_one({"id": o["user_id"]}, {"_id": 0, "phone": 1, "name": 1})
+        items.append({**o, "user_phone": (u or {}).get("phone", ""), "user_name": (u or {}).get("name", "")})
+    return {"items": items}
+
+
+# ---------------------------------------------------------------------------
+# Register router and CORS
+# ---------------------------------------------------------------------------
+app.include_router(api)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    client.close()
