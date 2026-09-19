@@ -41,7 +41,10 @@ export default function Paywall() {
         method: "POST",
         body: JSON.stringify({ plan: selected, coupon_code: couponInfo?.code }),
       });
-      setMsg(r.message || "Ordine registrato. Attendi l'attivazione.");
+      setMsg(
+        r.message ||
+          "✅ Richiesta inviata!\n\nLa tua richiesta di abbonamento è stata registrata.\nSarai contattato al più presto per completare il pagamento e attivare l'accesso Premium.",
+      );
     } catch (e: any) {
       setMsg(e.message);
     } finally {
@@ -85,6 +88,14 @@ export default function Paywall() {
             <Text style={styles.benefitTxt}>{b}</Text>
           </View>
         ))}
+
+        <View style={styles.infoBox}>
+          <Text style={styles.infoTitle}>{"ℹ️  Come funziona l'attivazione"}</Text>
+          <Text style={styles.infoBody}>
+            Scegli il piano e invia la richiesta. Ti contatteremo per completare il pagamento
+            (bonifico, contanti o accordo diretto) e attiveremo il tuo accesso Premium entro poche ore.
+          </Text>
+        </View>
 
         <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
           {plans.map((p) => {
@@ -164,7 +175,7 @@ export default function Paywall() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <GoldButton
           testID="checkout-btn"
-          label={loading ? "Attendere…" : "Continua con l'abbonamento"}
+          label={loading ? "Invio in corso…" : "Richiedi attivazione"}
           onPress={submit}
           loading={loading}
         />
@@ -227,6 +238,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   applyTxt: { color: colors.brandPrimary, fontWeight: "700" },
+  infoBox: {
+    marginTop: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  infoTitle: { color: colors.brandPrimary, fontWeight: "700", fontSize: 14 },
+  infoBody: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 6, lineHeight: 19 },
   footer: {
     position: "absolute",
     left: 0,
