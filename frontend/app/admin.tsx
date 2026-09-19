@@ -24,7 +24,7 @@ const CATEGORIES = [
   "Filosofia", "Nutrizione", "Somatognostica", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "messages" | "users" | "orders";
+type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders";
 
 export default function Admin() {
   const router = useRouter();
@@ -38,6 +38,7 @@ export default function Admin() {
     { key: "youtube", label: "YouTube" },
     { key: "ads", label: "Pubblicità" },
     { key: "coupons", label: "Sconti" },
+    { key: "comments", label: "Commenti" },
     { key: "messages", label: "Messaggi" },
     { key: "users", label: "Utenti" },
     { key: "orders", label: "Ordini" },
@@ -83,6 +84,7 @@ export default function Admin() {
         {section === "youtube" && <YoutubeSection />}
         {section === "ads" && <AdsSection />}
         {section === "coupons" && <CouponsSection />}
+        {section === "comments" && <CommentsSection />}
         {section === "messages" && <MessagesSection />}
         {section === "users" && <UsersSection />}
         {section === "orders" && <OrdersSection />}
@@ -615,6 +617,47 @@ function CouponsSection() {
             <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
           </Pressable>
         </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+/* ─────── Comments moderation ─────── */
+function CommentsSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const { data } = useQuery({ queryKey: ["admin-comments"], queryFn: () => api<any>("/admin/comments") });
+
+  const remove = async (id: string) => {
+    await api(`/admin/comments/${id}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["admin-comments"] });
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "700" }}>Moderazione commenti</Text>
+      <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
+        Elimina commenti offensivi o fuori tema.
+      </Muted>
+      {(data?.items || []).length === 0 && <Muted>Nessun commento ancora</Muted>}
+      {(data?.items || []).map((c: any) => (
+        <Card key={c.id} style={{ marginBottom: spacing.md }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+            <Text style={{ color: colors.brandPrimary, fontSize: 13, fontWeight: "700" }}>{c.user_name}</Text>
+            <Text style={{ color: colors.muted, fontSize: 11 }}>{new Date(c.created_at).toLocaleDateString("it-IT")}</Text>
+          </View>
+          <Text style={{ color: colors.onSurfaceSecondary, marginTop: spacing.sm, fontSize: 14, lineHeight: 20 }}>{c.body}</Text>
+          <Text style={{ color: colors.muted, fontSize: 11, marginTop: spacing.sm, fontStyle: "italic" }}>
+            su {c.content_type === "article" ? "articolo" : "media"}: {c.content_title}
+          </Text>
+          <Pressable
+            testID={`del-comment-${c.id}`}
+            onPress={() => remove(c.id)}
+            style={{ marginTop: spacing.md, alignSelf: "flex-start" }}
+          >
+            <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina commento</Text>
+          </Pressable>
+        </Card>
       ))}
     </ScrollView>
   );

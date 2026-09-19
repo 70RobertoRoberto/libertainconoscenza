@@ -722,6 +722,123 @@ async def my_referrals(user: dict = Depends(current_user)):
 
 
 # ---------------------------------------------------------------------------
+# Personal Stats
+# ---------------------------------------------------------------------------
+def _compute_streak(dates: list) -> tuple[int, int]:
+    """Return (current_streak, longest_streak) from a set of YYYY-MM-DD strings."""
+    if not dates:
+        return 0, 0
+    from datetime import date
+    day_set = set(dates)
+    today = datetime.now(timezone.utc).date()
+    # current streak
+    current = 0
+    cur = today
+    while cur.isoformat() in day_set:
+        current += 1
+        cur = date.fromordinal(cur.toordinal() - 1)
+    # If today has no activity, allow starting from yesterday
+    if current == 0:
+        cur = date.fromordinal(today.toordinal() - 1)
+        while cur.isoformat() in day_set:
+            current += 1
+            cur = date.fromordinal(cur.toordinal() - 1)
+    # longest
+    sorted_days = sorted(day_set)
+    longest = 1
+    run = 1
+    for i in range(1, len(sorted_days)):
+        prev = date.fromisoformat(sorted_days[i - 1])
+        curd = date.fromisoformat(sorted_days[i])
+        if (curd.toordinal() - prev.toordinal()) == 1:
+            run += 1
+            longest = max(longest, run)
+        else:
+            run = 1
+    return current, longest
+
+
+@api.get("/me/stats")
+async def my_stats(user: dict = Depends(current_user)):
+    uid = user["id"]
+    # articles read: distinct article content_ids in views
+    read_ids = set()
+    async for v in db.views.find({"user_id": uid, "content_type": "article"}, {"_id": 0, "content_id": 1}):
+        read_ids.add(v["content_id"])
+    # meditation minutes: sum durations of unique meditation media viewed or completed
+    med_ids = set()
+    async for v in db.views.find({"user_id": uid, "content_type": "media"}, {"_id": 0, "content_id": 1}):
+        med_ids.add(v["content_id"])
+    async for c in db.completions.find({"user_id": uid, "content_type": "media"}, {"_id": 0, "content_id": 1}):
+        med_ids.add(c["content_id"])
+    minutes = 0
+    if med_ids:
+        async for m in db.media.find(
+            {"id": {"$in": list(med_ids)}, "kind": "meditation"},
+            {"_id": 0, "duration_sec": 1},
+        ):
+            minutes += (m.get("duration_sec") or 0) // 60
+    # streak: unique dates of any view
+    dates = set()
+    async for v in db.views.find({"user_id": uid}, {"_id": 0, "date": 1}):
+        dates.add(v["date"])
+    current, longest = _compute_streak(list(dates))
+    # badges
+    badges = []
+    if current >= 3:
+        badges.append({"key": "streak3", "label": "3 giorni di seguito", "icon": "🌱"})
+    if current >= 7:
+        badges.append({"key": "streak7", "label": "1 settimana", "icon": "✨"})
+    if current >= 30:
+        badges.append({"key": "streak30", "label": "1 mese", "icon": "🌟"})
+    if longest >= 100:
+        badges.append({"key": "streak100", "label": "Maestro 100 giorni", "icon": "🏆"})
+    if minutes >= 60:
+        badges.append({"key": "min60", "label": "1 ora di meditazione", "icon": "🧘"})
+    if minutes >= 600:
+        badges.append({"key": "min600", "label": "10 ore di meditazione", "icon": "💫"})
+    if len(read_ids) >= 10:
+        badges.append({"key": "read10", "label": "10 articoli letti", "icon": "📖"})
+    if len(read_ids) >= 50:
+        badges.append({"key": "read50", "label": "50 articoli letti", "icon": "📚"})
+    return {
+        "articles_read": len(read_ids),
+        "meditations": len(med_ids),
+        "minutes_meditated": minutes,
+        "current_streak": current,
+        "longest_streak": longest,
+        "badges": badges,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Admin: comments moderation
+# ---------------------------------------------------------------------------
+@api.get("/admin/comments", dependencies=[Depends(require_admin)])
+async def admin_list_comments(limit: int = 200):
+    """List all comments across the app, most recent first."""
+    cursor = db.comments.find({}, {"_id": 0}).sort("created_at", -1).limit(limit)
+    items = []
+    async for c in cursor:
+        # attach a title snippet from the content
+        coll = db.articles if c.get("content_type") == "article" else db.media
+        target = await coll.find_one({"id": c["content_id"]}, {"_id": 0, "title": 1})
+        items.append({
+            **c,
+            "content_title": (target or {}).get("title", "(cancellato)"),
+        })
+    return {"items": items}
+
+
+@api.delete("/admin/comments/{comment_id}", dependencies=[Depends(require_admin)])
+async def admin_delete_comment(comment_id: str):
+    r = await db.comments.delete_one({"id": comment_id})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Non trovato")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 @api.post("/auth/register", response_model=TokenOut)

@@ -14,10 +14,12 @@ export default function Profile() {
   const { t, lang, setLang } = useLang();
   const [user, setUser] = useState<any>(null);
   const [ref, setRef] = useState<any>(null);
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
     auth.me().then(setUser).catch(() => {});
     api<any>("/referrals/me").then(setRef).catch(() => {});
+    api<any>("/me/stats").then(setStats).catch(() => {});
   }, []);
 
   const isPremium = user?.subscription?.status === "premium";
@@ -100,6 +102,40 @@ export default function Profile() {
         <OutlineButton testID="go-favorites" label="Vedi i miei preferiti" onPress={() => router.push("/favorites")} />
       </Card>
 
+      {stats && (
+        <Card style={{ marginBottom: spacing.lg }}>
+          <Text style={styles.sectionTitle}>📊  Il tuo percorso</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>{stats.articles_read}</Text>
+              <Text style={styles.statLbl}>Articoli letti</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>{stats.minutes_meditated}</Text>
+              <Text style={styles.statLbl}>Min. meditati</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.statVal}>{stats.current_streak}</Text>
+              <Text style={styles.statLbl}>Giorni di fila</Text>
+            </View>
+          </View>
+          {stats.badges?.length ? (
+            <View style={{ marginTop: spacing.md, flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+              {stats.badges.map((b: any) => (
+                <View key={b.key} style={styles.badge}>
+                  <Text style={{ fontSize: 14 }}>{b.icon}</Text>
+                  <Text style={styles.badgeTxt}>{b.label}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Muted style={{ marginTop: spacing.md, fontSize: 12 }}>
+              Continua ad esplorare per sbloccare badge di continuità.
+            </Muted>
+          )}
+        </Card>
+      )}
+
       {ref?.code && (
         <Card style={{ marginBottom: spacing.lg }}>
           <Text style={styles.sectionTitle}>🎁  Invita e guadagna</Text>
@@ -153,4 +189,30 @@ const styles = StyleSheet.create({
   },
   refCode: { color: colors.brandPrimary, fontSize: 20, fontWeight: "800", letterSpacing: 1 },
   refCount: { color: colors.onSurfaceTertiary, fontSize: 13 },
+  statsRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  statVal: { color: colors.brandPrimary, fontSize: 24, fontWeight: "800" },
+  statLbl: { color: colors.muted, fontSize: 11, marginTop: 2, textAlign: "center" },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.brandTertiary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  badgeTxt: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700" },
 });
