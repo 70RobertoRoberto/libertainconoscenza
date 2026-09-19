@@ -68,9 +68,11 @@ CATEGORIES = [
 ]
 
 PLANS = {
-    "3m": {"months": 3, "price_eur": 300, "label": "3 Mesi"},
-    "6m": {"months": 6, "price_eur": 500, "label": "6 Mesi"},
-    "12m": {"months": 12, "price_eur": 900, "label": "12 Mesi"},
+    "24h": {"days": 1, "months": 0, "price_eur": 10, "label": "24 Ore"},
+    "1w": {"days": 7, "months": 0, "price_eur": 50, "label": "1 Settimana"},
+    "3m": {"days": 90, "months": 3, "price_eur": 300, "label": "3 Mesi"},
+    "6m": {"days": 180, "months": 6, "price_eur": 500, "label": "6 Mesi"},
+    "12m": {"days": 365, "months": 12, "price_eur": 900, "label": "12 Mesi"},
 }
 
 
@@ -1431,7 +1433,8 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
         "amount_eur": amount,
         "original_eur": plan["price_eur"],
         "coupon_code": applied_code,
-        "months": plan["months"],
+        "months": plan.get("months", 0),
+        "days": plan.get("days", plan.get("months", 0) * 30),
         "status": "pending",
         "created_at": now_iso(),
     }
@@ -1452,7 +1455,7 @@ async def activate_order(order_id: str):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(404, "Ordine non trovato")
-    expires = datetime.now(timezone.utc) + timedelta(days=30 * order["months"])
+    expires = datetime.now(timezone.utc) + timedelta(days=order.get("days") or 30 * order.get("months", 0))
     await db.users.update_one(
         {"id": order["user_id"]},
         {"$set": {"subscription": {

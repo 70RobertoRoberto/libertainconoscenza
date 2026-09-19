@@ -6,7 +6,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
 
-type Plan = { key: string; months: number; price_eur: number; label: string };
+type Plan = { key: string; months: number; days: number; price_eur: number; label: string };
 
 export default function Paywall() {
   const router = useRouter();
@@ -21,7 +21,14 @@ export default function Paywall() {
 
   useEffect(() => {
     api<{ plans: Record<string, any> }>("/plans").then((r) => {
-      const arr = Object.entries(r.plans).map(([k, v]: any) => ({ key: k, ...v }));
+      const ORDER = ["24h", "1w", "3m", "6m", "12m"];
+      const arr = Object.entries(r.plans)
+        .map(([k, v]: any) => ({ key: k, ...v }))
+        .sort((a, b) => {
+          const ia = ORDER.indexOf(a.key);
+          const ib = ORDER.indexOf(b.key);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+        });
       setPlans(arr);
     });
   }, []);
@@ -84,6 +91,13 @@ export default function Paywall() {
             const active = p.key === selected;
             const best = p.key === "12m";
             const discounted = couponInfo ? Math.round(p.price_eur * (100 - couponInfo.percent_off) / 100) : p.price_eur;
+            // Compact caption per plan (avoid weird "€10/mese" for a 24h trial)
+            let caption = "";
+            if (p.key === "24h") caption = "accesso di 24 ore";
+            else if (p.key === "1w") caption = "accesso di 7 giorni";
+            else if (p.key === "12m") caption = "solo €75/mese";
+            else if (p.months && p.months > 0) caption = `€${(p.price_eur / p.months).toFixed(0)}/mese`;
+            else caption = `${p.days || ""} giorni`;
             return (
               <Pressable
                 key={p.key}
@@ -100,9 +114,7 @@ export default function Paywall() {
                       </View>
                     ) : null}
                   </View>
-                  <Muted style={{ marginTop: 4 }}>
-                    {p.months === 12 ? "solo €75/mese" : `€${(p.price_eur / p.months).toFixed(0)}/mese`}
-                  </Muted>
+                  <Muted style={{ marginTop: 4 }}>{caption}</Muted>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
                   {couponInfo ? (
