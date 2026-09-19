@@ -18,12 +18,14 @@ import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted, GoldButton, OutlineButton } from "@/src/ui";
 import { AudioPlayer } from "@/src/AudioPlayer";
 import { generateCertificate } from "@/src/certificate";
+import { useLang, catLabel } from "@/src/i18n";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [fav, setFav] = useState(false);
+  const { lang, t } = useLang();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["media", id],
@@ -131,12 +133,12 @@ export default function MediaDetail() {
           </Pressable>
         </View>
         <View style={{ padding: spacing.xl }}>
-          <Text style={styles.kind}>{data.kind === "meditation" ? "MEDITAZIONE" : "VIDEO"}</Text>
+          <Text style={styles.kind}>{data.kind === "meditation" ? t("meditations").toUpperCase() : t("videos").toUpperCase()}</Text>
           <Text style={styles.title}>{data.title}</Text>
           <View style={{ flexDirection: "row", marginTop: spacing.sm, gap: spacing.md }}>
-            <Muted>{data.category}</Muted>
-            {data.duration_sec ? <Muted>· {Math.round(data.duration_sec / 60)} min</Muted> : null}
-            <Muted>· {data.views} visualizzazioni</Muted>
+            <Muted>{catLabel(data.category, lang)}</Muted>
+            {data.duration_sec ? <Muted>· {Math.round(data.duration_sec / 60)} {t("minutes")}</Muted> : null}
+            <Muted>· {data.views} {t("views")}</Muted>
           </View>
           <Text style={styles.body}>{data.description}</Text>
 
@@ -147,7 +149,7 @@ export default function MediaDetail() {
           ) : (
             <GoldButton
               testID="play-media"
-              label={data.kind === "meditation" ? "▶  Ascolta ora" : "▶  Guarda ora"}
+              label={data.kind === "meditation" ? t("listen_now") : t("watch_now")}
               onPress={openMedia}
               style={{ marginTop: spacing.xl }}
             />
@@ -155,7 +157,7 @@ export default function MediaDetail() {
 
           <OutlineButton
             testID="download-certificate"
-            label="🏅  Scarica attestato di completamento"
+            label={t("download_cert")}
             onPress={downloadCert}
             style={{ marginTop: spacing.md }}
           />

@@ -97,26 +97,26 @@ export default function Profile() {
       )}
 
       <Card style={{ marginBottom: spacing.lg }}>
-        <Text style={styles.sectionTitle}>♥  Preferiti</Text>
+        <Text style={styles.sectionTitle}>♥  {t("favorites")}</Text>
         <View style={{ height: spacing.md }} />
-        <OutlineButton testID="go-favorites" label="Vedi i miei preferiti" onPress={() => router.push("/favorites")} />
+        <OutlineButton testID="go-favorites" label={t("favorites_see")} onPress={() => router.push("/favorites")} />
       </Card>
 
       {stats && (
         <Card style={{ marginBottom: spacing.lg }}>
-          <Text style={styles.sectionTitle}>📊  Il tuo percorso</Text>
+          <Text style={styles.sectionTitle}>{t("my_path")}</Text>
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statVal}>{stats.articles_read}</Text>
-              <Text style={styles.statLbl}>Articoli letti</Text>
+              <Text style={styles.statLbl}>{t("articles_read")}</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statVal}>{stats.minutes_meditated}</Text>
-              <Text style={styles.statLbl}>Min. meditati</Text>
+              <Text style={styles.statLbl}>{t("min_meditated")}</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statVal}>{stats.current_streak}</Text>
-              <Text style={styles.statLbl}>Giorni di fila</Text>
+              <Text style={styles.statLbl}>{t("streak_days")}</Text>
             </View>
           </View>
           {stats.badges?.length ? (
@@ -130,7 +130,7 @@ export default function Profile() {
             </View>
           ) : (
             <Muted style={{ marginTop: spacing.md, fontSize: 12 }}>
-              Continua ad esplorare per sbloccare badge di continuità.
+              {t("keep_exploring")}
             </Muted>
           )}
         </Card>
@@ -138,15 +138,15 @@ export default function Profile() {
 
       {ref?.code && (
         <Card style={{ marginBottom: spacing.lg }}>
-          <Text style={styles.sectionTitle}>🎁  Invita e guadagna</Text>
+          <Text style={styles.sectionTitle}>{t("invite")}</Text>
           <Muted style={{ marginTop: spacing.sm }}>
-            Condividi il tuo codice: quando un amico si iscrive con il tuo codice ricevi un mese Premium in regalo.
+            {t("invite_desc")}
           </Muted>
           <View style={styles.refCodeBox}>
             <Text testID="referral-code" style={styles.refCode}>{ref.code}</Text>
-            <Text style={styles.refCount}>{ref.count} invitati</Text>
+            <Text style={styles.refCount}>{ref.count} {t("invited")}</Text>
           </View>
-          <GoldButton testID="share-referral" label="Condividi il codice" onPress={shareReferral} style={{ marginTop: spacing.md }} />
+          <GoldButton testID="share-referral" label={t("share_code")} onPress={shareReferral} style={{ marginTop: spacing.md }} />
         </Card>
       )}
 

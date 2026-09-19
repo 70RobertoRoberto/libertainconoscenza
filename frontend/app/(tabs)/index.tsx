@@ -18,6 +18,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE, LOGO_URL } from "@/src/assets";
 import { Muted } from "@/src/ui";
+import { useLang, catLabel } from "@/src/i18n";
 
 type Article = {
   id: string;
@@ -33,6 +34,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [q, setQ] = useState("");
+  const { t, lang } = useLang();
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["articles-home"],
@@ -66,7 +68,7 @@ export default function Home() {
                 <Image source={{ uri: LOGO_URL }} style={styles.logoSmall} />
                 <View>
                   <Text style={styles.brandTitle}>Conoscenza Aperta</Text>
-                  <Muted style={{ fontSize: 11 }}>Sapienza per crescere</Muted>
+                  <Muted style={{ fontSize: 11 }}>{t("tagline")}</Muted>
                 </View>
               </View>
             </View>
@@ -76,7 +78,7 @@ export default function Home() {
                 testID="home-search"
                 value={q}
                 onChangeText={setQ}
-                placeholder="Cerca articoli, meditazioni…"
+                placeholder={t("search_placeholder")}
                 placeholderTextColor={colors.muted}
                 style={styles.search}
                 returnKeyType="search"
@@ -90,12 +92,12 @@ export default function Home() {
 
             {searching ? (
               <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
-                <Text style={styles.section}>Risultati per "{q}"</Text>
+                <Text style={styles.section}>{t("results_for")} "{q}"</Text>
                 {(searchRes?.articles || []).map((a: any) => (
                   <Pressable key={a.id} testID={`search-article-${a.id}`} onPress={() => router.push(`/article/${a.id}`)} style={styles.row}>
                     <Image source={{ uri: a.image_url || CATEGORY_IMAGES[a.category] || DEFAULT_IMAGE }} style={styles.rowImg} />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
-                      <Text style={styles.rowCat}>{a.category.toUpperCase()}</Text>
+                      <Text style={styles.rowCat}>{catLabel(a.category, lang).toUpperCase()}</Text>
                       <Text style={styles.rowTitle} numberOfLines={2}>{a.title}</Text>
                     </View>
                   </Pressable>
@@ -104,13 +106,13 @@ export default function Home() {
                   <Pressable key={m.id} testID={`search-media-${m.id}`} onPress={() => router.push(`/media/${m.id}`)} style={styles.row}>
                     <Image source={{ uri: m.thumbnail_url || CATEGORY_IMAGES[m.category] || DEFAULT_IMAGE }} style={styles.rowImg} />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
-                      <Text style={styles.rowCat}>{m.kind === "meditation" ? "MEDITAZIONE" : "VIDEO"}</Text>
+                      <Text style={styles.rowCat}>{m.kind === "meditation" ? t("meditations").toUpperCase() : t("videos").toUpperCase()}</Text>
                       <Text style={styles.rowTitle} numberOfLines={2}>{m.title}</Text>
                     </View>
                   </Pressable>
                 ))}
                 {!(searchRes?.articles?.length || searchRes?.media?.length) && (
-                  <Muted style={{ marginTop: spacing.md }}>Nessun risultato</Muted>
+                  <Muted style={{ marginTop: spacing.md }}>{t("no_results")}</Muted>
                 )}
               </View>
             ) : (
@@ -130,14 +132,14 @@ export default function Home() {
                       style={styles.heroGrad}
                     />
                     <View style={styles.heroText}>
-                      <Text style={styles.heroCat}>{hero.category.toUpperCase()}</Text>
+                      <Text style={styles.heroCat}>{catLabel(hero.category, lang).toUpperCase()}</Text>
                       <Text style={styles.heroTitle} numberOfLines={3}>
                         {hero.title}
                       </Text>
                     </View>
                   </Pressable>
                 )}
-                <Text style={styles.section}>Ultimi articoli</Text>
+                <Text style={styles.section}>{t("latest_articles")}</Text>
               </>
             )}
           </View>
@@ -154,11 +156,11 @@ export default function Home() {
               style={styles.rowImg}
             />
             <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={styles.rowCat}>{item.category.toUpperCase()}</Text>
+              <Text style={styles.rowCat}>{catLabel(item.category, lang).toUpperCase()}</Text>
               <Text style={styles.rowTitle} numberOfLines={2}>
                 {item.title}
               </Text>
-              <Muted style={{ marginTop: 4, fontSize: 12 }}>{item.views} letture</Muted>
+              <Muted style={{ marginTop: 4, fontSize: 12 }}>{item.views} {t("reads")}</Muted>
             </View>
           </Pressable>
         )}

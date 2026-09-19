@@ -17,6 +17,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
+import { useLang, catLabel } from "@/src/i18n";
 
 const CATEGORIES = [
   "Tutte",
@@ -38,6 +39,7 @@ export default function Library() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [cat, setCat] = useState("Tutte");
+  const { t, lang } = useLang();
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["library", cat],
@@ -47,7 +49,7 @@ export default function Library() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.md }}>
-        <Text style={styles.title}>Biblioteca</Text>
+        <Text style={styles.title}>{t("library_title")}</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -56,6 +58,7 @@ export default function Library() {
         >
           {CATEGORIES.map((c) => {
             const active = c === cat;
+            const label = c === "Tutte" ? t("all") : catLabel(c, lang);
             return (
               <Pressable
                 key={c}
@@ -63,7 +66,7 @@ export default function Library() {
                 onPress={() => setCat(c)}
                 style={[styles.chip, active && styles.chipActive]}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{c}</Text>
+                <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
               </Pressable>
             );
           })}
@@ -79,7 +82,7 @@ export default function Library() {
         refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.brandPrimary} />}
         ListEmptyComponent={
           <View style={{ padding: spacing.xxxl, alignItems: "center" }}>
-            <Muted>Nessun contenuto in questa categoria</Muted>
+            <Muted>{t("no_content")}</Muted>
           </View>
         }
         renderItem={({ item }) => (
@@ -97,14 +100,14 @@ export default function Library() {
               style={StyleSheet.absoluteFillObject as any}
             />
             <View style={styles.cardText}>
-              <Text style={styles.cardCat}>{item.category.toUpperCase()}</Text>
+              <Text style={styles.cardCat}>{catLabel(item.category, lang).toUpperCase()}</Text>
               <Text style={styles.cardTitle} numberOfLines={3}>
                 {item.title}
               </Text>
             </View>
             {item.is_premium ? (
               <View style={styles.premiumBadge}>
-                <Text style={styles.premiumTxt}>PREMIUM</Text>
+                <Text style={styles.premiumTxt}>{t("premium").toUpperCase()}</Text>
               </View>
             ) : null}
           </Pressable>

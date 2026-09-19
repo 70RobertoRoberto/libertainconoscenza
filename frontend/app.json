@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "conoscenzaaperta",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -41,7 +41,8 @@
       "expo-status-bar",
       "expo-notifications",
       "expo-audio",
-      "expo-sharing"
+      "expo-sharing",
+      "@react-native-vector-icons/fontawesome6"
     ],
     "experiments": {
       "typedRoutes": true

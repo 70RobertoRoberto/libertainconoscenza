@@ -1478,11 +1478,17 @@ async def list_orders():
 # ---------------------------------------------------------------------------
 # Public share pages with OpenGraph meta (for WhatsApp / Telegram preview)
 # ---------------------------------------------------------------------------
-def _og_html(title: str, description: str, image: str, url: str) -> str:
+def _og_html(title: str, description: str, image: str, url: str, kind: str = "articolo") -> str:
     def esc(s: str) -> str:
         return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     title_e = esc(title)
-    desc_e = esc((description or "")[:280])
+    teaser = (description or "")[:220].rsplit(" ", 1)[0] + "…" if len(description or "") > 220 else (description or "")
+    desc_e = esc(teaser)
+    action = {
+        "articolo": "Iscriviti per leggere l'articolo completo",
+        "meditazione": "Iscriviti per ascoltare la meditazione",
+        "video": "Iscriviti per guardare il video",
+    }.get(kind, "Iscriviti per continuare")
     return f"""<!doctype html>
 <html lang=\"it\">
 <head>
@@ -1505,21 +1511,32 @@ def _og_html(title: str, description: str, image: str, url: str) -> str:
 <style>
   body{{font-family:Georgia,'Times New Roman',serif;background:#0A0F0D;color:#F0F0EA;margin:0;padding:0;}}
   .wrap{{max-width:720px;margin:0 auto;padding:24px;}}
-  .brand{{color:#D4AF37;letter-spacing:4px;font-size:12px;text-align:center;margin-bottom:8px;}}
-  img{{width:100%;height:auto;border-radius:14px;margin:16px 0;}}
-  h1{{color:#F0F0EA;font-weight:400;font-size:32px;line-height:1.25;}}
-  .cat{{color:#B38B4D;font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px;}}
-  p{{color:#E0E0D5;font-size:17px;line-height:1.7;white-space:pre-wrap;}}
-  a.cta{{display:inline-block;margin-top:24px;padding:14px 24px;background:#D4AF37;color:#0A0F0D;border-radius:999px;text-decoration:none;font-weight:700;}}
+  .brand{{color:#D4AF37;letter-spacing:6px;font-size:12px;text-align:center;margin:16px 0 24px;font-family:system-ui,sans-serif;font-weight:700;}}
+  img{{width:100%;height:auto;border-radius:14px;margin:8px 0 24px;}}
+  h1{{color:#F0F0EA;font-weight:400;font-size:30px;line-height:1.25;margin:0 0 12px;}}
+  .cat{{color:#B38B4D;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px;font-family:system-ui,sans-serif;font-weight:700;}}
+  p{{color:#C5C5B5;font-size:17px;line-height:1.7;}}
+  .gate{{margin-top:28px;padding:24px;border-radius:14px;background:linear-gradient(180deg,#151E1A,#0A0F0D);border:1px solid #D4AF37;}}
+  .gate h2{{color:#D4AF37;font-family:system-ui,sans-serif;font-size:19px;font-weight:700;margin:0 0 8px;}}
+  .gate p{{color:#E0E0D5;font-size:14px;margin:0 0 16px;font-family:system-ui,sans-serif;}}
+  a.cta{{display:inline-block;padding:14px 24px;background:#D4AF37;color:#0A0F0D;border-radius:999px;text-decoration:none;font-weight:800;font-family:system-ui,sans-serif;letter-spacing:0.5px;}}
+  a.cta.secondary{{background:transparent;color:#D4AF37;border:1px solid #D4AF37;margin-left:8px;}}
+  .foot{{text-align:center;color:#88948E;font-size:11px;margin-top:32px;font-family:system-ui,sans-serif;}}
 </style>
 </head>
 <body>
 <div class=\"wrap\">
   <div class=\"brand\">CONOSCENZA APERTA</div>
+  <div class=\"cat\">{esc(kind)}</div>
   <h1>{title_e}</h1>
   <img src=\"{esc(image)}\" alt=\"{title_e}\"/>
   <p>{desc_e}</p>
-  <a class=\"cta\" href=\"{esc(url)}\">Apri nell'app</a>
+  <div class=\"gate\">
+    <h2>🔐 {action}</h2>
+    <p>Unisciti alla community <b>Conoscenza Aperta</b> e accedi a corsi, meditazioni, video, articoli approfonditi e messaggi personali dalla community.</p>
+    <a class=\"cta\" href=\"conoscenzaaperta://register?ref={esc(url.split('/')[-1])}\">Apri l'app e iscriviti</a>
+  </div>
+  <div class=\"foot\">Sapienza per crescere · Wisdom to grow</div>
 </div>
 </body></html>"""
 
@@ -1544,7 +1561,7 @@ async def share_article_page(article_id: str, request: Request):
     base = _public_base_url(request)
     image = a.get("image_url") or f"{base}/api/share/placeholder.png"
     url = f"{base}/api/share/article/{article_id}"
-    html = _og_html(a["title"], a.get("summary", ""), image, url)
+    html = _og_html(a["title"], a.get("summary", ""), image, url, kind="articolo")
     return Response(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -1556,7 +1573,8 @@ async def share_media_page(media_id: str, request: Request):
     base = _public_base_url(request)
     image = m.get("thumbnail_url") or f"{base}/api/share/placeholder.png"
     url = f"{base}/api/share/media/{media_id}"
-    html = _og_html(m["title"], m.get("description", ""), image, url)
+    kind = "meditazione" if m.get("kind") == "meditation" else "video"
+    html = _og_html(m["title"], m.get("description", ""), image, url, kind=kind)
     return Response(content=html, media_type="text/html; charset=utf-8")
 
 

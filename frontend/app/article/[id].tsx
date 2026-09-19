@@ -14,16 +14,19 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import FontAwesome6 from "@react-native-vector-icons/fontawesome6";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
+import { useLang, catLabel } from "@/src/i18n";
 
 export default function ArticleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [fav, setFav] = useState(false);
+  const { lang, t } = useLang();
 
   const { data, isLoading } = useQuery({
     queryKey: ["article", id],
@@ -122,31 +125,31 @@ export default function ArticleDetail() {
         </View>
 
         <View style={{ paddingHorizontal: spacing.xl, marginTop: -spacing.xl }}>
-          <Text style={styles.cat}>{data.category.toUpperCase()}</Text>
+          <Text style={styles.cat}>{catLabel(data.category, lang).toUpperCase()}</Text>
           <Text style={styles.title}>{data.title}</Text>
-          <Muted style={{ marginTop: spacing.sm }}>{data.views} letture</Muted>
+          <Muted style={{ marginTop: spacing.sm }}>{data.views} {t("reads")}</Muted>
           <View style={styles.divider} />
           <Text style={styles.body}>{data.summary}</Text>
           {data.source_url ? (
             <Pressable onPress={() => Linking.openURL(data.source_url)}>
-              <Text style={styles.source}>Fonte: {data.source_url}</Text>
+              <Text style={styles.source}>{t("source")}: {data.source_url}</Text>
             </Pressable>
           ) : null}
 
           <View style={styles.commentsWrap}>
-            <Text style={styles.cSection}>Commenti ({comments?.items?.length || 0})</Text>
+            <Text style={styles.cSection}>{t("comments")} ({comments?.items?.length || 0})</Text>
             <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
               <TextInput
                 testID="new-comment"
                 value={newComment}
                 onChangeText={setNewComment}
-                placeholder="Lascia un pensiero…"
+                placeholder={t("write_comment")}
                 placeholderTextColor={colors.muted}
                 style={styles.cInput}
                 multiline
               />
               <Pressable testID="send-comment" onPress={sendComment} disabled={posting} style={styles.cSend}>
-                <Text style={{ color: colors.onBrandPrimary, fontWeight: "700" }}>{posting ? "…" : "Invia"}</Text>
+                <Text style={{ color: colors.onBrandPrimary, fontWeight: "700" }}>{posting ? "…" : t("send")}</Text>
               </Pressable>
             </View>
             {(comments?.items || []).map((c: any) => (
@@ -162,10 +165,12 @@ export default function ArticleDetail() {
 
       <View style={[styles.shareBar, { paddingBottom: insets.bottom + spacing.md }]}>
         <Pressable testID="share-wa" onPress={shareWA} style={[styles.shareBtn, { backgroundColor: "#25D366" }]}>
-          <Text style={styles.shareTxt}>WhatsApp</Text>
+          <FontAwesome6 name="whatsapp" iconStyle="brand" size={18} color="#FFFFFF" />
+          <Text style={styles.shareTxt} allowFontScaling={false} accessibilityLanguage="en">WhatsApp</Text>
         </Pressable>
         <Pressable testID="share-tg" onPress={shareTG} style={[styles.shareBtn, { backgroundColor: "#229ED9" }]}>
-          <Text style={styles.shareTxt}>Telegram</Text>
+          <FontAwesome6 name="telegram" iconStyle="brand" size={18} color="#FFFFFF" />
+          <Text style={styles.shareTxt} allowFontScaling={false} accessibilityLanguage="en">Telegram</Text>
         </Pressable>
       </View>
     </View>
@@ -275,6 +280,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
   },
-  shareTxt: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
+  shareTxt: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 });

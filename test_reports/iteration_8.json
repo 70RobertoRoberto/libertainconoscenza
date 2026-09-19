@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 8 – validated the 3 user-reported fixes on 'Conoscenza Aperta': (1) share buttons now display clean 'WhatsApp' and 'Telegram' text with the FontAwesome6 brand glyphs (whatsapp \\uf232 + telegram \\uf2c6) rendering correctly even on web preview — no 'bomba'/'telegramma' or 💣/📮 fallback anywhere; testIDs share-wa / share-tg still present and tappable. (2) Full IT ⇄ EN toggle propagates across Home, Library, Media, Profile and Article detail: IT default shows 'Sapienza per crescere', 'Cerca articoli, meditazioni…' placeholder, 'Ultimi articoli', 'Biblioteca'+'Tutte' chip, 'Meditazioni & Video'+'Tutti/Meditazioni/Video' chips, 'Preferiti', 'Il tuo percorso' with 'Articoli letti/Min. meditati/Giorni di fila', 'Invita e guadagna', 'Lingua'; after switching to English via Profilo→Lingua, all corresponding labels flip to 'Wisdom to grow', 'Search articles, meditations…', 'Latest articles', 'Library'+'All', 'Meditations & Videos'+'All/Meditations/Videos', 'Favorites', 'Your journey' with 'Articles read/Min. meditated/Day streak', 'Invite & earn', 'Language'; category chips also translate (Personal Growth, Spiritual, Philosophy, Psychology, Nutrition, Videos). (3) OG share pages are now gated invitation pages: GET /api/share/article/{id} returns text/html with the exact phrase 'Iscriviti per leggere' AND a href='conoscenzaaperta://register?...' deep link; media share renders 'Iscriviti per ascoltare la meditazione' for kind=meditation and 'Iscriviti per guardare il video' for kind=video; all OG meta tags (og:title/description/image/url/type) and twitter:card=summary_large_image still present; og:description is a truncated teaser (≤220 chars ending with …) rather than the full ~2300-char summary; unknown ids return 404. Backend: 13/13 pytest pass in test_iteration8_share_gated_and_i18n.py. No deprecated Expo packages, no red screens, only the harmless expo-notifications web warning. Regression sanity: /search 200, /me/stats 200, /favorites/toggle 200, /admin/stats/summary 200, checkout with LANCIO2026 discounts 12m plan to 720€.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration8_share_gated_and_i18n.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [
+    "No fixes required — all 3 reported bugs are verified fixed end-to-end.",
+    "Optional (not blocking): media detail 'views' pluralization is 'X views' even for X=1 in both IT and EN — consider a singular/plural i18n key if strict copy matters.",
+    "Optional: iteration_7 note about server.py length (~1764 lines) still applies — future refactor into routers/ (share/, admin/, billing/, content/) is recommended but not blocking.",
+    "Optional: OG share page uses og:type='article' also for media share URLs — if strict semantics matter, switch to og:type='video.other' inside share_media_page. Not required by user reports."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1481-1541 _og_html renders the gated CTA correctly with HTML-escaped fields and a deep-link 'conoscenzaaperta://register?ref=…' — matches app.json scheme update.",
+    "server.py:1485 description teaser truncates on last space + adds '…' when >220 chars — safe against emoji/CJK boundaries because .rsplit(' ',1) is on the substring, not the full text.",
+    "frontend/app/article/[id].tsx:167-174 uses FontAwesome6 brand icons with iconStyle='brand' and Text with allowFontScaling=false + accessibilityLanguage='en' — this is the correct API and prevents OS-level auto-translation of 'WhatsApp'/'Telegram' to 'bomba'/'telegramma'.",
+    "src/i18n.ts covers all newly-added keys used on Home/Library/Media/Profile/Article/Media detail; catLabel translation of category chips also works.",
+    "app.json:8 scheme 'conoscenzaaperta' matches the deep-link href emitted by /api/share/*.",
+    "Media share endpoint still emits og:type='article'; not a defect but semantically it could be 'video.other' for kind=video."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration8_share_gated_and_i18n.py",
+    "/app/test_reports/iteration_8.json",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13)",
+    "frontend": "100% (share buttons, i18n IT/EN toggle across all 4 tabs + article/media detail all verified visually + textually)"
+  },
+  "seed_data_creation": "None. No users/articles/media/coupons created. Only side-effect: toggled a favorite on then off for admin against the first article (state left clean).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 8 tests live at /app/backend/tests/test_iteration8_share_gated_and_i18n.py. Contract reminders: login response uses 'access_token'; /api/articles and /api/media require Bearer auth and return {items:[…]}; share endpoints /api/share/article/{id} and /api/share/media/{id} are PUBLIC (no auth), return text/html, and now contain BOTH the OG meta suite AND a gated CTA: phrase 'Iscriviti per leggere' (articles), 'Iscriviti per ascoltare la meditazione' (media.kind=meditation), 'Iscriviti per guardare il video' (media.kind=video), each with a deep-link href starting with 'conoscenzaaperta://register'. og:description is intentionally truncated to a short teaser (~220 chars + '…'); do not assert full-length summary equality. Frontend testIDs: share-wa, share-tg on /article/{id} (bottom-pinned); Profilo → Lingua toggle keys are 'Italiano'/'English' visible text; Admin credentials +393331234567 / Admin2026!. Preview host: https://integral-wellness-2.preview.emergentagent.com. app.json scheme is now 'conoscenzaaperta' (not 'frontend'). New frontend dep: @react-native-vector-icons/fontawesome6 — brand glyphs (whatsapp \\uf232, telegram \\uf2c6) DO render on the web preview.",
+  "rca_of_issue": "N/A — all three reported bugs are validated as fixed. Fix recap: (1) WhatsApp/Telegram labels: replaced emoji glyphs (which iOS/Android sometimes replaced with 💣 bomba / 📮 telegramma due to font-substitution + auto-translate) with FontAwesome6 brand icons plus plain-text 'WhatsApp'/'Telegram' Text nodes carrying allowFontScaling=false and accessibilityLanguage='en' — bypasses OS translation and font substitution. (2) i18n: /app/frontend/src/i18n.ts extended with ~50 new keys covering Home tagline/search/latest_articles, Library title/all, Media title+kind chips, Profile favorites/journey/streak/invite/language, Article source/comments/send/write_comment, Media minutes/views/reads/premium; catLabel mapping translates category chips. (3) Gated share page: _og_html now renders a dark-themed page with an 'Iscriviti per {leggere|ascoltare la meditazione|guardare il video}' CTA and a 'conoscenzaaperta://register?ref=…' deep-link button while keeping the full OG + twitter:card meta so WhatsApp/Telegram unfurl a proper preview card; app.json scheme updated from 'frontend' to 'conoscenzaaperta' so the deep link resolves in a native build."
+}
