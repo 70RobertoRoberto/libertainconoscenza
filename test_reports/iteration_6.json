@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 6 – full regression sweep on both backend (28/28 pytest passed) and frontend (11/11 core flows on 390x844 mobile viewport). Backend covered: health (/api/), categories (12 incl. Video), plans (3m/6m/12m at 300/500/900€), auth register/login/me for admin +393331234567/Admin2026! (referral_code=MAESTRO-2026, is_admin=true), auth invalid-password path (401), 13+ seed articles across 10+ categories, view increment on article detail, 18 media items, meditation kind filter, SoundHelix meditation URLs regression (no Pixabay), premium-media 402 for free user, /search?q=medita, favorites toggle + list (returns {articles, media, ids}), comment POST/GET/DELETE, /completions + /certificate/{id}, /me/stats shape (articles_read/meditations/minutes/current_streak/longest_streak/badges), /referrals/me = MAESTRO-2026 + count, referral registration increments admin's count by 1, /billing/checkout {plan:12m} = 900€, LANCIO2026 coupon (auto-created via /admin/coupons {code, percent_off:20, max_uses:1000}) discounts 12m to 720€, admin article create+delete, ad create+list, broadcast message visible in /messages, admin stats summary/daily/top-content, admin users+orders, /register-push non-blocking with placeholder key. Frontend on mobile 390x844: login screen renders with correct testIDs (login-phone-input/login-password-input/login-submit-button); after login, Home shows global search that returns 'Risultati per medita' with 5 mixed cards (4 meditation + 1 disciplina orientale) — regression confirmed; Biblioteca grid shows articles with category chips (Tutte, Crescita personale, Spirituale, Filosofia…); Media tab renders 'Meditazioni & Video' with Tutti/Meditazioni/Video filter chips; Profilo shows Amministratore + PREMIUM + ADMIN badges, Lingua IT/EN toggle, Pannello Admin, Preferiti card, 📊 Il tuo percorso with '1 Articoli letti / 35 Min. meditati / 1 Giorni di fila' plus continuità hint, 🎁 referral code MAESTRO-2026 visible (testID=referral-code); Pannello Admin loads Statistiche with 14 Utenti/1 Premium/13 Articoli/18 Media/30 Viste totali + 3-day visualizzazioni chart + Articoli più letti top list; all 10 admin tabs found and clickable (stats/articles/media/youtube/ads/coupons/comments/messages/users/orders). No React Native red screen, no PAGEERROR, only harmless expo-notifications web warning. No deprecated Expo packages in repo (no expo-av / expo-barcode-scanner / expo-background-fetch imports).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration6_regression.py",
+    "/app/test_reports/pytest/iteration_6.xml"
+  ],
+  "action_items": [
+    "No regressions or bugs found — all iteration-1-through-5 functionality is intact and green.",
+    "Optional hardening (nice-to-have, not blocking): add explicit testIDs to bottom tab buttons (tab-home / tab-library / tab-media / tab-messages / tab-profile) so playwright can click via testID instead of URL navigation.",
+    "Optional: add testIDs to the three stat boxes on Profilo (stat-articles / stat-minutes / stat-streak) for stronger automated coverage.",
+    "Optional: add data-testid on meditation cards (med-card-<id>) so E2E can drive Media→Detail→AudioPlayer without relying on text lookup.",
+    "Env-dependent items intentionally skipped: real Emergent SuprSend push delivery, YouTube Data API v3 full-archive fetch, and Emergent Object Storage file upload — endpoints reachable and behave correctly with placeholder/RSS fallback."
+  ],
+  "critical_code_review_comments": [
+    "server.py:1420-1445 /billing/checkout correctly applies percent_off from coupon (900 → 720 for 20%) and returns amount_eur + original_eur — clean.",
+    "server.py:1352-1372 /admin/coupons validates percent_off with pydantic Field(ge=1, le=100) — proper input validation.",
+    "server.py:574-590 root /api/ + categories + plans do NOT require auth — good for boot health checks by frontend.",
+    "server.py:1244-1260 /register-push swallows relay errors and still stores device_token locally — non-blocking as expected.",
+    "server.py:1067-1078 media detail returns 402 for premium content when user is not premium — correct HTTP semantics.",
+    "server.py:1611-1660 Ads CRUD complete: create/list/toggle/delete + public /ads/active.",
+    "server.py file is 1678 lines — approaching the 700-line guideline; consider splitting into routers/ (auth, content, admin, billing) in a future refactor, though not blocking.",
+    "No MongoDB _id leakage spotted in any response payload sampled during this run.",
+    "No deprecated Expo packages found in /app/frontend."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration6_regression.py",
+    "/app/test_reports/iteration_6.json",
+    "/app/test_reports/pytest/iteration_6.xml"
+  ],
+  "success_rate": {
+    "backend": "100% (28/28)",
+    "frontend": "100% (11/11 core flows)"
+  },
+  "seed_data_creation": "Registered fresh test users +39333700xxxx (regression fixture) and +39333800xxxx (referral bump test) via /api/auth/register — both persist in db.users. Created LANCIO2026 coupon (percent_off=20, max_uses=1000) if not present. Test article + test ad + test broadcast message + test comments were all created and cleaned up. NO existing seed content, admin account, users, or the iteration-4 TEST_commento_auto comment were touched or deleted, per instructions ('facciamo un test con ciò che hai creato' / do NOT delete).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 6 regression file: /app/backend/tests/test_iteration6_regression.py. Run with EXPO_PUBLIC_BACKEND_URL env var set (pytest config strips xdist via '-o addopts=\"\"' or use single-worker; parallel xdist works too since tests are read-mostly + isolated write cleanup). Admin creds unchanged: +393331234567 / Admin2026!. Actual API response shapes (worth remembering): /categories → {\"categories\": [str,...]}; /plans → {\"plans\": {\"3m\":{...},\"6m\":{...},\"12m\":{...}}}; /favorites → {articles:[], media:[], ids:[]}; /billing/checkout → {amount_eur, original_eur, order_id, plan, ...}; coupon body needs percent_off (NOT discount_percent); article body needs summary (NOT body); media source field is media_url (NOT source_url); /register-push body needs device_token + user_id + platform. Frontend testIDs verified: login-phone-input, login-password-input, login-submit-button, home-search, go-admin, admin-tab-<key> where key ∈ {stats, articles, media, youtube, ads, coupons, comments, messages, users, orders}, referral-code, fav-btn, audio-toggle, coupon-input, coupon-code, coupon-percent, coupon-max, save-coupon, ad-image, ad-caption, ad-click, save-ad, article-title, article-summary, save-article, media-title, media-url, save-media, yt-url, yt-import, send-msg, del-comment-<id>, activate-<orderId>. Bottom tab buttons do NOT have per-tab testIDs — navigate via URL /library, /media, /messages, /profile on Expo Router web preview. Preview URL: https://integral-wellness-2.preview.emergentagent.com. No new packages installed.",
+  "rca_of_issue": "N/A — no bugs found. The 8 initial test failures were all test-script mismatches with the actual API contract (wrong field names in payloads and response paths); they were corrected in test_iteration6_regression.py and the final run is 28/28 green. No application code was modified."
+}
