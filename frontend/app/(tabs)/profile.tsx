@@ -102,6 +102,16 @@ export default function Profile() {
         <OutlineButton testID="go-favorites" label={t("favorites_see")} onPress={() => router.push("/favorites")} />
       </Card>
 
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>🔐  Sicurezza</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-change-password"
+          label="Cambia password"
+          onPress={() => router.push("/change-password")}
+        />
+      </Card>
+
       {stats && (
         <Card style={{ marginBottom: spacing.lg }}>
           <Text style={styles.sectionTitle}>{t("my_path")}</Text>

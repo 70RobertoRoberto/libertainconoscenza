@@ -889,6 +889,28 @@ async def me(user: dict = Depends(current_user)):
     return to_public_user(user)
 
 
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str = Field(min_length=6, max_length=128)
+
+
+@api.post("/auth/change-password")
+async def change_password(inp: ChangePasswordIn, user: dict = Depends(current_user)):
+    """Change the password of the currently logged-in user."""
+    full = await db.users.find_one({"id": user["id"]})
+    if not full:
+        raise HTTPException(404, "Utente non trovato")
+    if not check_password(inp.current_password, full["password_hash"]):
+        raise HTTPException(400, "Password attuale errata")
+    if inp.current_password == inp.new_password:
+        raise HTTPException(400, "La nuova password deve essere diversa dall'attuale")
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"password_hash": hash_password(inp.new_password)}},
+    )
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Articles
 # ---------------------------------------------------------------------------
