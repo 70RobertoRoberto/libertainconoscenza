@@ -16,7 +16,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
-import { GoldButton, OutlineButton, Muted, Card } from "@/src/ui";
+import { GoldButton, Muted, Card } from "@/src/ui";
 
 const CATEGORIES = [
   "Crescita personale", "Spirituale", "Fisica quantistica", "Meditazione",
@@ -329,37 +329,58 @@ function MediaSection() {
   const pickAndUpload = async () => {
     setMsg("");
     try {
+      // Broad audio filter on Android so recorder files (m4a, amr, 3gp, opus) are visible.
       const pick = await DocumentPicker.getDocumentAsync({
-        type: kind === "meditation" ? "audio/*" : "video/*",
+        type: kind === "meditation"
+          ? ["audio/*", "audio/mpeg", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/aac", "audio/amr", "audio/3gpp", "audio/ogg", "audio/opus", "audio/flac", "application/octet-stream"]
+          : "video/*",
         copyToCacheDirectory: true,
+        multiple: false,
       });
       if (pick.canceled || !pick.assets?.[0]) return;
       const asset = pick.assets[0];
       setLoading(true);
+      setMsg(`Caricamento in corso: ${asset.name || "file"}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
       const form = new FormData();
+      const inferredMime =
+        asset.mimeType ||
+        (kind === "meditation"
+          ? (asset.name?.toLowerCase().endsWith(".m4a") ? "audio/mp4"
+            : asset.name?.toLowerCase().endsWith(".amr") ? "audio/amr"
+            : asset.name?.toLowerCase().endsWith(".3gp") || asset.name?.toLowerCase().endsWith(".3gpp") ? "audio/3gpp"
+            : asset.name?.toLowerCase().endsWith(".wav") ? "audio/wav"
+            : asset.name?.toLowerCase().endsWith(".ogg") ? "audio/ogg"
+            : asset.name?.toLowerCase().endsWith(".opus") ? "audio/opus"
+            : asset.name?.toLowerCase().endsWith(".flac") ? "audio/flac"
+            : "audio/mpeg")
+          : "video/mp4");
       if (Platform.OS === "web") {
         const blob = await (await fetch(asset.uri)).blob();
         form.append("file", blob, asset.name || "file");
       } else {
-        form.append("file", { uri: asset.uri, name: asset.name || "file", type: asset.mimeType || (kind === "meditation" ? "audio/mpeg" : "video/mp4") } as any);
+        form.append("file", { uri: asset.uri, name: asset.name || "file", type: inferredMime } as any);
       }
-      // Direct fetch (multipart) — do NOT set Content-Type manually
-      const { setToken } = await import("@/src/api");
-      // Get token
-      const authHelper = await import("@/src/api");
-      const hasT = await authHelper.auth.hasToken();
-      if (!hasT) throw new Error("Non autenticato");
-      const token = await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null) || (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      const token =
+        (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
+        (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      if (!token) throw new Error("Non autenticato");
       const res = await fetch(`${backend}/api/admin/upload`, {
         method: "POST",
         body: form as any,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(await res.text());
       const j = await res.json();
       setUrl(j.url);
-      setMsg(`File caricato: ${asset.name} (${Math.round(j.size / 1024)} KB). Ora compila i campi e salva.`);
+      // Auto-fill title from the filename if empty (strip extension).
+      if (!title && asset.name) {
+        const nice = asset.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+        if (nice) setTitle(nice.charAt(0).toUpperCase() + nice.slice(1));
+      }
+      const sizeKB = Math.round(j.size / 1024);
+      const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+      setMsg(`✅ File caricato: ${asset.name} (${sizeStr}). Ora compila i campi e tocca "Pubblica".`);
     } catch (e: any) {
       setMsg(`Errore upload: ${e.message}`);
     } finally {
@@ -384,8 +405,19 @@ function MediaSection() {
           </Pressable>
         </View>
         <TextInput testID="media-title" value={title} onChangeText={setTitle} placeholder="Titolo" placeholderTextColor={colors.muted} style={styles.input} />
-        <TextInput testID="media-url" value={url} onChangeText={setUrl} placeholder="URL video/audio (YouTube, mp3, mp4) o carica file" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
-        <OutlineButton testID="upload-file" label={`↑  Carica file ${kind === "meditation" ? "audio" : "video"}`} onPress={pickAndUpload} style={{ marginTop: spacing.sm }} />
+        <TextInput testID="media-url" value={url} onChangeText={setUrl} placeholder="URL YouTube / mp3 / mp4 — oppure carica un file qui sotto ↓" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
+        <GoldButton
+          testID="upload-file"
+          label={kind === "meditation" ? "🎙️  Carica registrazione dal telefono" : "📹  Carica video dal telefono"}
+          onPress={pickAndUpload}
+          style={{ marginTop: spacing.md }}
+          loading={loading}
+        />
+        {kind === "meditation" ? (
+          <Muted style={{ marginTop: spacing.sm, fontSize: 12 }}>
+            Supporta MP3, M4A, WAV, AMR, 3GP, OGG, OPUS, FLAC. Anche le registrazioni fatte con il registratore del telefono (max 300 MB).
+          </Muted>
+        ) : null}
         <TextInput value={thumb} onChangeText={setThumb} placeholder="URL immagine anteprima (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
         <TextInput value={desc} onChangeText={setDesc} placeholder="Descrizione" placeholderTextColor={colors.muted} multiline style={[styles.input, { marginTop: spacing.md, minHeight: 80, textAlignVertical: "top" }]} />
         <TextInput value={duration} onChangeText={setDuration} placeholder="Durata in minuti" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />

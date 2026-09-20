@@ -1360,8 +1360,19 @@ async def list_favorites(user: dict = Depends(current_user)):
 # File upload (Emergent Object Storage)
 # ---------------------------------------------------------------------------
 ALLOWED_MIME = {
-    "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/ogg", "audio/aac",
-    "video/mp4", "video/quicktime", "video/webm",
+    # Audio (broad support for phone recorders: m4a, amr, 3gpp, opus, flac, etc.)
+    "audio/mpeg", "audio/mp3",
+    "audio/mp4", "audio/x-m4a", "audio/m4a",
+    "audio/wav", "audio/x-wav", "audio/wave",
+    "audio/ogg", "audio/opus",
+    "audio/aac", "audio/x-aac",
+    "audio/amr", "audio/3gpp", "audio/3gpp2",
+    "audio/flac", "audio/x-flac",
+    "audio/webm",
+    "application/octet-stream",  # some phones send generic mime for recordings
+    # Video
+    "video/mp4", "video/quicktime", "video/webm", "video/3gpp",
+    # Images
     "image/jpeg", "image/png", "image/webp",
 }
 
@@ -1369,26 +1380,49 @@ ALLOWED_MIME = {
 @api.post("/admin/upload", dependencies=[Depends(require_admin)])
 async def admin_upload(file: UploadFile = File(...)):
     """Upload a file to Emergent Object Storage; returns a public API URL."""
-    if file.content_type not in ALLOWED_MIME:
-        raise HTTPException(415, f"Tipo file non supportato: {file.content_type}")
+    ALLOWED_EXTS = {
+        "mp3", "m4a", "mp4", "wav", "ogg", "opus", "aac", "amr", "3gp", "3gpp",
+        "flac", "webm", "mov", "jpg", "jpeg", "png", "webp",
+    }
+    filename = file.filename or ""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    mime_ok = file.content_type in ALLOWED_MIME
+    ext_ok = ext in ALLOWED_EXTS
+    if not mime_ok and not ext_ok:
+        raise HTTPException(415, f"Tipo file non supportato ({file.content_type or ext or 'sconosciuto'})")
     data = await file.read()
     if len(data) > 300 * 1024 * 1024:
         raise HTTPException(413, "File troppo grande (max 300MB)")
-    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"
+    if not ext:
+        ext = "bin"
     path = f"{APP_NAME}/uploads/{uuid.uuid4()}.{ext}"
-    result = await run_in_threadpool(_put_object_sync, path, data, file.content_type)
+    # Normalise mime for storage (avoid saving octet-stream when we know the ext)
+    saved_mime = file.content_type or ""
+    if saved_mime in ("", "application/octet-stream"):
+        ext_to_mime = {
+            "mp3": "audio/mpeg", "m4a": "audio/mp4", "mp4": "audio/mp4",
+            "wav": "audio/wav", "ogg": "audio/ogg", "opus": "audio/opus",
+            "aac": "audio/aac", "amr": "audio/amr",
+            "3gp": "audio/3gpp", "3gpp": "audio/3gpp",
+            "flac": "audio/flac", "webm": "audio/webm",
+            "mov": "video/quicktime",
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp",
+        }
+        saved_mime = ext_to_mime.get(ext, "application/octet-stream")
+    result = await run_in_threadpool(_put_object_sync, path, data, saved_mime)
     stored_path = result.get("path", path)
     # persist metadata
     await db.uploads.insert_one({
         "id": str(uuid.uuid4()),
         "path": stored_path,
-        "mime": file.content_type,
+        "mime": saved_mime,
         "size": len(data),
-        "filename": file.filename,
+        "filename": filename,
         "created_at": now_iso(),
     })
     public_url = f"/api/files/{stored_path}"
-    return {"path": stored_path, "url": public_url, "size": len(data), "mime": file.content_type}
+    return {"path": stored_path, "url": public_url, "size": len(data), "mime": saved_mime, "filename": filename}
 
 
 @api.get("/files/{path:path}")
