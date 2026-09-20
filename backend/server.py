@@ -82,7 +82,7 @@ PLANS = {
 class RegisterIn(BaseModel):
     phone: str
     password: str = Field(min_length=6, max_length=128)
-    name: Optional[str] = None
+    name: str = Field(min_length=2, max_length=80)
     referral_code: Optional[str] = None
 
 

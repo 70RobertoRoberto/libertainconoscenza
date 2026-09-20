@@ -110,6 +110,18 @@ export default function Profile() {
           label="Chi Siamo"
           onPress={() => router.push("/about")}
         />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="go-terms"
+          label="Termini di Servizio"
+          onPress={() => router.push("/terms")}
+        />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="go-privacy"
+          label="Privacy Policy"
+          onPress={() => router.push("/privacy")}
+        />
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>

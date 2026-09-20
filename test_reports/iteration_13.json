@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 13 tested two new features: (1) 'name' field is now mandatory on POST /api/auth/register (min 2 chars) and (2) new /terms and /privacy screens plus profile buttons. Backend: 7/7 pytest tests pass (missing name -> 422, null name -> 422, empty name -> 422, single-char name -> 422, valid 'Mario' -> 200 with persisted name verified via /auth/me, duplicate phone regression -> 409, admin login regression OK). Frontend: register screen shows 'Nome *' label WITHOUT 'facoltativo', placeholder 'Il tuo nome', testID 'register-name-input' present; empty-name submit shows 'Inserisci il tuo nome' error and does NOT call backend; unchecked terms toggle shows 'Devi accettare i termini e la privacy per continuare' error and does NOT call backend; Termini and Privacy inline links navigate correctly to /terms and /privacy; happy-path submit (valid name + phone + password + checked toggle) creates user and redirects to (tabs) home; profile screen 'Il nostro progetto' card shows 3 outline buttons (go-about, go-terms, go-privacy) which each navigate correctly. Minor spec drift found: request expected '11. Contatti' section on /terms but the actual terms.tsx has only 10 sections (last is '10. Contatti e legge applicabile'). All required content ('1. Chi siamo e cosa offriamo', 'Ultimo aggiornamento: 20 settembre 2026') is present. No deprecated Expo packages or React Native issues detected in the files reviewed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration13_register_name_required.py",
+    "/app/test_reports/pytest/iteration_13.xml"
+  ],
+  "action_items": [
+    "Minor spec drift: review_request expected section '11. Contatti' on /terms but the current /app/frontend/app/terms.tsx has only 10 sections (last one is '10. Contatti e legge applicabile'). Behavior is correct; either update the spec or split section 10 into '10. Legge applicabile' + '11. Contatti'. No user-facing issue."
+  ],
+  "critical_code_review_comments": [
+    "backend server.py line 857 still calls _gen_referral_code(inp.name or 'AMICO') — the fallback is now unreachable because name is required (>=2 chars). Cosmetic only; safe to leave.",
+    "register.tsx line 105: label uses colors.brandPrimary for the '*' which is the app's gold color, not pure red — request said 'red *' but this matches the app's design system (gold primary). Not a bug."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration13_register_name_required.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "Backend tests created ~5 disposable users with phones matching '+3933312XXXXX' (random 5-digit suffix), one named 'Mario'. Frontend happy-path test created 1 additional user named 'Mario' via the UI. Admin account +393331234567 was NOT modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 13 verified name-required + terms/privacy features. Backend contract: POST /api/auth/register requires {phone, password (>=6), name (2-80 chars)}; missing/short name -> 422; duplicate phone -> 409. Frontend register.tsx uses testIDs: register-name-input, register-phone-input, register-password-input, accept-terms-toggle, register-submit-button, go-to-login. Profile 'Il nostro progetto' card exposes go-about, go-terms, go-privacy. Terms currently has 10 sections (not 11) — cosmetic spec drift noted."
+}

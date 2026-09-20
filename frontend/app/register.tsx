@@ -28,6 +28,7 @@ export default function Register() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [referral, setReferral] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
@@ -43,11 +44,14 @@ export default function Register() {
 
   const submit = async () => {
     setErr("");
+    if (!name.trim()) return setErr("Inserisci il tuo nome");
+    if (name.trim().length < 2) return setErr("Il nome deve avere almeno 2 caratteri");
     if (!phone || !password) return setErr(t("err_required"));
     if (password.length < 6) return setErr(t("err_min"));
+    if (!acceptedTerms) return setErr("Devi accettare i termini e la privacy per continuare");
     setLoading(true);
     try {
-      const user = await auth.register(normalizePhone(phone), password, name.trim() || undefined, referral.trim() || undefined);
+      const user = await auth.register(normalizePhone(phone), password, name.trim(), referral.trim() || undefined);
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -98,14 +102,15 @@ export default function Register() {
             </Pressable>
           </View>
 
-          <Text style={styles.label}>{t("name_optional")}</Text>
+          <Text style={styles.label}>{t("name_required")} <Text style={{ color: colors.brandPrimary }}>*</Text></Text>
           <TextInput
             testID="register-name-input"
             value={name}
             onChangeText={setName}
-            placeholder="Come vuoi essere chiamato"
+            placeholder={t("name_placeholder")}
             placeholderTextColor={colors.muted}
             style={styles.input}
+            autoCapitalize="words"
           />
 
           <Text style={[styles.label, { marginTop: spacing.lg }]}>{t("phone")}</Text>
@@ -146,6 +151,33 @@ export default function Register() {
 
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
+          <Pressable
+            testID="accept-terms-toggle"
+            onPress={() => setAcceptedTerms((v) => !v)}
+            style={styles.termsRow}
+          >
+            <View style={[styles.termsCheck, acceptedTerms && styles.termsCheckActive]}>
+              {acceptedTerms ? <Text style={styles.termsCheckMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.termsTxt}>
+              Ho letto e accetto i{" "}
+              <Text
+                style={styles.termsLink}
+                onPress={(e) => { e.stopPropagation?.(); router.push("/terms"); }}
+              >
+                Termini di Servizio
+              </Text>
+              {" "}e la{" "}
+              <Text
+                style={styles.termsLink}
+                onPress={(e) => { e.stopPropagation?.(); router.push("/privacy"); }}
+              >
+                Privacy Policy
+              </Text>
+              .
+            </Text>
+          </Pressable>
+
           <GoldButton
             testID="register-submit-button"
             label={t("register")}
@@ -184,6 +216,43 @@ const styles = StyleSheet.create({
   },
   err: { color: colors.brandPrimary, marginTop: spacing.md, textAlign: "center" },
   helperTxt: { marginTop: 6, fontSize: 11, fontStyle: "italic" },
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing.xl,
+    paddingRight: spacing.md,
+  },
+  termsCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.brandPrimary,
+    marginRight: spacing.md,
+    marginTop: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  termsCheckActive: {
+    backgroundColor: colors.brandPrimary,
+  },
+  termsCheckMark: {
+    color: colors.surface,
+    fontWeight: "900",
+    fontSize: 14,
+    lineHeight: 16,
+  },
+  termsTxt: {
+    flex: 1,
+    color: colors.onSurfaceSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  termsLink: {
+    color: colors.brandPrimary,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
   langChip: {
     flex: 1,
     height: 44,
