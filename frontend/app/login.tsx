@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { auth } from "@/src/api";
 import { GoldButton, H1, Muted, Body } from "@/src/ui";
+import { PasswordInput } from "@/src/PasswordInput";
 import { LOGO_URL } from "@/src/assets";
 import { useLang } from "@/src/i18n";
 import { registerForPush } from "@/src/push";
@@ -28,12 +29,24 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  const normalizePhone = (raw: string) => {
+    // Strip spaces, dots, parentheses, dashes. Keep leading + and digits only.
+    let p = (raw || "").replace(/[\s().-]/g, "");
+    if (p.startsWith("00")) p = "+" + p.slice(2);
+    if (!p.startsWith("+")) {
+      // Italian mobile numbers usually start with 3 and are 10 digits — auto-prefix +39
+      if (/^3\d{8,9}$/.test(p)) p = "+39" + p;
+      else if (p) p = "+" + p;
+    }
+    return p;
+  };
+
   const submit = async () => {
     setErr("");
     if (!phone || !password) return setErr(t("err_creds"));
     setLoading(true);
     try {
-      const user = await auth.login(phone.trim(), password);
+      const user = await auth.login(normalizePhone(phone), password);
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -77,16 +90,18 @@ export default function Login() {
             autoCapitalize="none"
             style={styles.input}
           />
+          <Muted style={styles.helperTxt}>
+            Includi il prefisso internazionale +39 · Gli spazi sono facoltativi
+          </Muted>
 
           <Text style={[styles.label, { marginTop: spacing.lg }]}>{t("password")}</Text>
-          <TextInput
+          <PasswordInput
             testID="login-password-input"
             value={password}
             onChangeText={setPassword}
             placeholder="La tua password"
             placeholderTextColor={colors.muted}
-            secureTextEntry
-            style={styles.input}
+            inputStyle={styles.input}
           />
 
           {err ? <Text style={styles.err}>{err}</Text> : null}
@@ -138,5 +153,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     fontSize: 14,
     textAlign: "center",
+  },
+  helperTxt: {
+    marginTop: 6,
+    fontSize: 11,
+    fontStyle: "italic",
   },
 });

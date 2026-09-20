@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { auth } from "@/src/api";
 import { GoldButton, H1, Muted, Body } from "@/src/ui";
+import { PasswordInput } from "@/src/PasswordInput";
 import { LOGO_URL } from "@/src/assets";
 import { useLang } from "@/src/i18n";
 import { registerForPush } from "@/src/push";
@@ -30,13 +31,23 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
+  const normalizePhone = (raw: string) => {
+    let p = (raw || "").replace(/[\s().-]/g, "");
+    if (p.startsWith("00")) p = "+" + p.slice(2);
+    if (!p.startsWith("+")) {
+      if (/^3\d{8,9}$/.test(p)) p = "+39" + p;
+      else if (p) p = "+" + p;
+    }
+    return p;
+  };
+
   const submit = async () => {
     setErr("");
     if (!phone || !password) return setErr(t("err_required"));
     if (password.length < 6) return setErr(t("err_min"));
     setLoading(true);
     try {
-      const user = await auth.register(phone.trim(), password, name.trim() || undefined, referral.trim() || undefined);
+      const user = await auth.register(normalizePhone(phone), password, name.trim() || undefined, referral.trim() || undefined);
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -108,16 +119,18 @@ export default function Register() {
             autoCapitalize="none"
             style={styles.input}
           />
+          <Muted style={styles.helperTxt}>
+            Includi il prefisso internazionale +39 · Gli spazi sono facoltativi
+          </Muted>
 
           <Text style={[styles.label, { marginTop: spacing.lg }]}>{t("password_hint")}</Text>
-          <TextInput
+          <PasswordInput
             testID="register-password-input"
             value={password}
             onChangeText={setPassword}
             placeholder="Crea una password sicura"
             placeholderTextColor={colors.muted}
-            secureTextEntry
-            style={styles.input}
+            inputStyle={styles.input}
           />
 
           <Text style={[styles.label, { marginTop: spacing.lg }]}>Codice referral (facoltativo)</Text>
@@ -170,6 +183,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   err: { color: colors.brandPrimary, marginTop: spacing.md, textAlign: "center" },
+  helperTxt: { marginTop: 6, fontSize: 11, fontStyle: "italic" },
   langChip: {
     flex: 1,
     height: 44,

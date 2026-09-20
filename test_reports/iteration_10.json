@@ -1,0 +1,29 @@
+{
+  "summary": "Verified phone-with-spaces normalisation and show/hide password eye toggle end-to-end. Backend (7/7 pytest pass): POST /api/auth/login accepts admin phone in all forms '+393331234567', '+39 333 1234567', '+39.333-123.4567' and returns 200 + access_token + user.is_admin=true; wrong password returns 400/401; POST /api/auth/register with a spaced Italian mobile stores the normalised '+39...' form and login with the same spaced input works. Change-password regression: wrong current_password -> 400, successful change -> 200, admin password restored to Admin2026! and verified with a final 200 login. Frontend (Expo web preview, mobile viewport 375x667): (1) Login screen shows helper 'Includi il prefisso internazionale +39 · Gli spazi sono facoltativi' under phone; [data-testid=login-password-input-toggle] is present and toggling flips input type password<->text so the typed value 'MyTypedPwd123' becomes visible then hidden. (2) End-to-end login with '+39 333 1234567' + 'Admin2026!' navigates into the tabs and all 5 tabs (Home, Biblioteca, Media, Messaggi, Profilo) render — user was NOT logged out. (3) Register screen has identical helper text and a working [data-testid=register-password-input-toggle]. (4) /change-password has three independent toggles (current-password-toggle, new-password-toggle, confirm-password-toggle) — toggling one does not affect the other two. test_credentials.md still valid.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration10_phone_normalization.py",
+    "/app/test_reports/pytest/iteration_10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Login/Register both duplicate the same normalizePhone() function — extract into src/phone.ts to keep client and server logic in one place (still fine as a temp UX aid because the backend already normalises).",
+    "PasswordInput sets textContentType='password' but comment says 'none'; consider aligning to avoid confusing readers. Not functional.",
+    "server.py remains ~1900 lines — still worth splitting into routers per prior iteration comment."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration10_phone_normalization.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "One TEST_norm user is created per pytest run in /api/auth/register (random +39 3XXXXXXXX phone). Admin password was flipped to a temp value inside the change-password test and immediately restored to Admin2026!; verified with a final login (200).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend response envelope for auth uses {access_token, token_type, user} — NOT 'token'. Base URL comes from frontend/.env EXPO_PUBLIC_BACKEND_URL. pytest.ini enables xdist by default; tests that mutate admin state must run in the same worker (module scope) or use a scratch user. Login is idempotent for space/dash/dot variants because server.py normalize_phone() strips them before lookup.",
+  "rca_of_issue": "The original user complaint that 'entering spaces made login fail' was caused by the CLIENT never sending the spaced string to the backend as-is (it now does, but backend also strips), plus a placeholder that showed '+39 333 1234567' encouraging spaces. Fix combines: (a) client-side normalizePhone() in login.tsx/register.tsx, (b) helper caption telling users spaces are optional, (c) reusable PasswordInput with eye toggle so typos are catchable. All three are verified working."
+}

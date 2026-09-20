@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
+import { PasswordInput } from "@/src/PasswordInput";
 
 export default function ChangePassword() {
   const router = useRouter();
@@ -60,39 +61,33 @@ export default function ChangePassword() {
 
       <Card>
         <Text style={styles.label}>Password attuale</Text>
-        <TextInput
+        <PasswordInput
           testID="current-password"
           value={current}
           onChangeText={setCurrent}
           placeholder="Password attuale"
           placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          autoCapitalize="none"
+          inputStyle={styles.input}
         />
 
         <Text style={[styles.label, { marginTop: spacing.md }]}>Nuova password</Text>
-        <TextInput
+        <PasswordInput
           testID="new-password"
           value={next}
           onChangeText={setNext}
           placeholder="Almeno 6 caratteri"
           placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          autoCapitalize="none"
+          inputStyle={styles.input}
         />
 
         <Text style={[styles.label, { marginTop: spacing.md }]}>Conferma nuova password</Text>
-        <TextInput
+        <PasswordInput
           testID="confirm-password"
           value={confirm}
           onChangeText={setConfirm}
           placeholder="Ripeti la nuova password"
           placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          autoCapitalize="none"
+          inputStyle={styles.input}
         />
 
         {msg ? (
