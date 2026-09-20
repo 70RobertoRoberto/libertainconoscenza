@@ -32,7 +32,6 @@ const CATEGORIES = [
   "Filosofia",
   "Nutrizione",
   "Somatognostica",
-  "Video",
 ];
 
 export default function Library() {
