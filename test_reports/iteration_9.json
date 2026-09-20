@@ -1,0 +1,28 @@
+{
+  "summary": "Verified Change Password feature end-to-end. Backend: 5/5 pytest cases pass on POST /api/auth/change-password (wrong current -> 400 'Password attuale errata'; short new_password -> 422; same-as-current -> 400 with 'diversa'; missing auth -> 401; success -> 200 {ok:true}, old password no longer logs in, new password logs in, admin password restored to Admin2026!). Frontend: Profile tab shows '🔐 Sicurezza' card with outlined 'Cambia password' button (testID go-change-password) after admin login; tapping navigates to /change-password screen; header 'Cambia password' renders; all three password TextInputs and submit button are visible via their testIDs (current-password, new-password, confirm-password, submit-cp). Client-side mismatch validation ('Le due password non coincidono') and backend error ('Password attuale errata') both surface correctly in the UI. Admin password confirmed restored to Admin2026! after all tests.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_change_password.py",
+    "/app/test_reports/pytest/iteration_9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is ~1600+ lines; consider splitting into routers (auth, articles, media, admin, billing) for maintainability.",
+    "Change-password endpoint correctly hashes with bcrypt and does not invalidate existing JWTs. Optional hardening: rotate JWT (bump user's token_version) on password change so previously issued tokens stop working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_change_password.py (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. No users/articles/media modified. Admin password was temporarily changed inside the success test and then restored to Admin2026! (verified via login 200).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_change_password.py. The pytest.ini uses xdist parallelism; if adding tests that mutate the admin password, either mark them to run in the same worker (module scope) or serialize by using a dedicated non-admin user, otherwise cross-worker races will cause spurious 'Password attuale errata' failures on other change-password tests. Frontend uses EXPO_PUBLIC_BACKEND_URL (not EXPO_BACKEND_URL).",
+  "rca_of_issue": "N/A — feature works as designed. The original user-reported symptom (Sicurezza card missing) was purely a stale web preview / Metro cache issue; the code in profile.tsx correctly renders the card and after refresh the button is visible for the admin user."
+}
