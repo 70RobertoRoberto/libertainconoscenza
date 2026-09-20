@@ -1,0 +1,39 @@
+{
+  "summary": "Backend-only verification of the share-page CTA fallback fix in /app/backend/server.py::_og_html (GET /api/share/article/{id}). 12/12 pytest cases PASS in /app/backend/tests/test_iteration12_share_cta_fallback.py. Verified: (1) primary CTA 'Iscriviti ora' present, (2) secondary CTA 'Apri sul web' present, (3) 'Hai già un account? Accedi' login link present, (4) inline JS function tryDeepLink() defined, (5) deep link string 'conoscenzaaperta://register?ref=' present, (6) web fallback URL ending with /register present AND uses the same host as the incoming request (host derived from x-forwarded-host / host header via _public_base_url), (7) inline JS 'var webUrl = \"...\"' variable exists and points to /register on the correct host (this is the specific regression the bug introduced — previously only `deepLink` was inlined and the button did nothing when the app was not installed), (8) 'Accedi' link points to /login on the same host, (9) all required OG meta tags emitted (og:title, og:description, og:image, og:url, twitter:card=summary_large_image), (10) GET /api/share/article/unknown_id still returns 404, (11) GET /api/articles listing works and (12) GET /api/articles/{id} detail works. Response is text/html with charset=utf-8. Re-ran iteration 7 (11/11 PASS) and iteration 8 share tests (12/13 PASS) as regression — one iteration-8 test is now expectedly stale (see minor issues).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/share/article/{id}",
+        "issue": "Stale test: /app/backend/tests/test_iteration8_share_gated_and_i18n.py::TestShareArticleGated::test_deep_link_href_present now fails because it asserts href=\"conoscenzaaperta://register...\". The bug-fix INTENTIONALLY moved the deep link out of the anchor href (which becomes the web /register URL) and into an inline JS `var deepLink = \"...\"` invoked by onclick=tryDeepLink(). Behavior is correct — the test needs updating to look for the JS variable OR for the raw scheme string inside the body (both work). Iteration 12 test file already covers this correctly via test_deep_link_string_present + test_js_webUrl_variable_points_to_register."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration12_share_cta_fallback.py",
+    "/app/test_reports/pytest/iteration_12.xml"
+  ],
+  "action_items": [
+    "Optional cleanup: update /app/backend/tests/test_iteration8_share_gated_and_i18n.py::test_deep_link_href_present to match the new implementation (deep link is now in `var deepLink = \"conoscenzaaperta://register?ref=...\"` inside the <script>, not in an href attribute). Not blocking — the new iteration 12 test file already covers the deep link presence correctly."
+  ],
+  "critical_code_review_comments": [
+    "server.py::_og_html tryDeepLink() only triggers the fallback if the tab is still visible after 1.4s. On iOS Safari, when the app IS installed and iOS shows the 'Open in App' prompt but the user dismisses it, the visibility state may still be 'visible' -> the user is bounced to /register anyway. Acceptable UX (better than doing nothing), but worth noting.",
+    "server.py::_og_html hardcodes /register and /login paths. If the Expo frontend router changes those routes (e.g., /(auth)/register), the fallback will 404 on the web app. Consider centralising via a WEB_REGISTER_PATH env var or a small shared constant.",
+    "server.py::_public_base_url falls back to `x-forwarded-host` -> `host` -> literal 'localhost'. If both headers are stripped by an intermediate proxy the CTA URL would become https://localhost/register which is broken. Consider raising / logging when this happens.",
+    "server.py is now ~1947 lines (recurring finding) — /share/* + OG HTML template should be extracted to backend/share_routes.py."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration12_share_cta_fallback.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12 iteration-12 tests) — one iteration-8 regression test is stale by design, not a real failure", "frontend": "not tested (out of scope)"},
+  "seed_data_creation": "None. Read-only tests using existing seed articles fetched via GET /api/articles as admin. No user was created or modified.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "BASE_URL comes from /app/frontend/.env EXPO_PUBLIC_BACKEND_URL. Admin login envelope: {access_token, token_type, user}. Share-page HTML is produced by _og_html() in server.py; the deep link is now stored in a JS variable (`var deepLink`) not in an anchor href — the anchor href is the web /register URL. Iteration-8 test test_deep_link_href_present is stale by design (see minor issues) — do not treat as a real regression."
+}

@@ -1603,6 +1603,16 @@ def _og_html(title: str, description: str, image: str, url: str, kind: str = "ar
         "meditazione": "Iscriviti per ascoltare la meditazione",
         "video": "Iscriviti per guardare il video",
     }.get(kind, "Iscriviti per continuare")
+    # Web fallback = the Expo web bundle root (same host that serves this HTML).
+    # Assume the host serves both the frontend (root) and /api backend.
+    # We strip /api/... from the current URL to derive the web root.
+    from urllib.parse import urlparse
+    parsed = urlparse(url)
+    web_base = f"{parsed.scheme}://{parsed.netloc}"
+    web_register_url = f"{web_base}/register"
+    web_login_url = f"{web_base}/login"
+    ref_slug = esc(url.split('/')[-1])
+    deep_link = f"conoscenzaaperta://register?ref={ref_slug}"
     return f"""<!doctype html>
 <html lang=\"it\">
 <head>
@@ -1633,8 +1643,11 @@ def _og_html(title: str, description: str, image: str, url: str, kind: str = "ar
   .gate{{margin-top:28px;padding:24px;border-radius:14px;background:linear-gradient(180deg,#151E1A,#0A0F0D);border:1px solid #D4AF37;}}
   .gate h2{{color:#D4AF37;font-family:system-ui,sans-serif;font-size:19px;font-weight:700;margin:0 0 8px;}}
   .gate p{{color:#E0E0D5;font-size:14px;margin:0 0 16px;font-family:system-ui,sans-serif;}}
-  a.cta{{display:inline-block;padding:14px 24px;background:#D4AF37;color:#0A0F0D;border-radius:999px;text-decoration:none;font-weight:800;font-family:system-ui,sans-serif;letter-spacing:0.5px;}}
-  a.cta.secondary{{background:transparent;color:#D4AF37;border:1px solid #D4AF37;margin-left:8px;}}
+  .cta-row{{display:flex;flex-wrap:wrap;gap:10px;}}
+  .cta{{display:inline-block;padding:14px 22px;background:#D4AF37;color:#0A0F0D;border-radius:999px;text-decoration:none;font-weight:800;font-family:system-ui,sans-serif;letter-spacing:0.5px;border:none;cursor:pointer;font-size:15px;}}
+  .cta.secondary{{background:transparent;color:#D4AF37;border:1px solid #D4AF37;}}
+  .cta:hover{{opacity:0.9;}}
+  .login-link{{display:block;margin-top:12px;color:#B38B4D;font-family:system-ui,sans-serif;font-size:13px;text-decoration:underline;}}
   .foot{{text-align:center;color:#88948E;font-size:11px;margin-top:32px;font-family:system-ui,sans-serif;}}
 </style>
 </head>
@@ -1648,10 +1661,48 @@ def _og_html(title: str, description: str, image: str, url: str, kind: str = "ar
   <div class=\"gate\">
     <h2>🔐 {action}</h2>
     <p>Unisciti alla community <b>Conoscenza Aperta</b> e accedi a corsi, meditazioni, video, articoli approfonditi e messaggi personali dalla community.</p>
-    <a class=\"cta\" href=\"conoscenzaaperta://register?ref={esc(url.split('/')[-1])}\">Apri l'app e iscriviti</a>
+    <div class=\"cta-row\">
+      <a class=\"cta\" id=\"ctaJoin\" href=\"{esc(web_register_url)}\" onclick=\"return tryDeepLink(event)\">Iscriviti ora</a>
+      <a class=\"cta secondary\" href=\"{esc(web_register_url)}\">Apri sul web</a>
+    </div>
+    <a class=\"login-link\" href=\"{esc(web_login_url)}\">Hai già un account? Accedi</a>
   </div>
   <div class=\"foot\">Sapienza per crescere · Wisdom to grow</div>
 </div>
+<script>
+  // Try to open the native app via the custom scheme; if the app is not
+  // installed the deep link is silently ignored and we fall back to the web
+  // version after ~1.4 seconds.
+  var deepLink = \"{deep_link}\";
+  var webUrl = \"{esc(web_register_url)}\";
+  function tryDeepLink(e) {{
+    // Only attempt the deep link on mobile (both Android + iOS).
+    var ua = (navigator.userAgent||\"\").toLowerCase();
+    var isMobile = /android|iphone|ipad|ipod/i.test(ua);
+    if (!isMobile) return true; // desktop: just follow the href to /register
+    e.preventDefault();
+    var start = Date.now();
+    var fallbackTimer = setTimeout(function() {{
+      // If the app didn't take over the page within 1.4s, go to the web version.
+      if (Date.now() - start < 2500 && document.visibilityState === 'visible') {{
+        window.location.replace(webUrl);
+      }}
+    }}, 1400);
+    // Try opening the deep link.
+    var a = document.createElement('a');
+    a.href = deepLink;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    // If the page loses visibility (app took over) cancel the fallback.
+    document.addEventListener('visibilitychange', function() {{
+      if (document.visibilityState !== 'visible') {{
+        clearTimeout(fallbackTimer);
+      }}
+    }}, {{ once: true }});
+    return false;
+  }}
+</script>
 </body></html>"""
 
 
