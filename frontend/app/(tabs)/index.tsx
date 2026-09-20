@@ -1,19 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Pressable,
   Image,
   RefreshControl,
   FlatList,
   TextInput,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useQuery } from "@tanstack/react-query";
+import * as SecureStore from "expo-secure-store";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE, LOGO_URL } from "@/src/assets";
@@ -34,7 +35,35 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [q, setQ] = useState("");
+  const [aboutDismissed, setAboutDismissed] = useState(true); // start true so it doesn't flash
   const { t, lang } = useLang();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        let stored: string | null = null;
+        if (Platform.OS === "web") {
+          stored = typeof window !== "undefined" ? window.localStorage.getItem("ca_about_dismissed") : null;
+        } else {
+          stored = await SecureStore.getItemAsync("ca_about_dismissed");
+        }
+        setAboutDismissed(stored === "1");
+      } catch {
+        setAboutDismissed(false);
+      }
+    })();
+  }, []);
+
+  const dismissAbout = async () => {
+    setAboutDismissed(true);
+    try {
+      if (Platform.OS === "web") {
+        window.localStorage.setItem("ca_about_dismissed", "1");
+      } else {
+        await SecureStore.setItemAsync("ca_about_dismissed", "1");
+      }
+    } catch {}
+  };
 
   const { data, refetch, isFetching } = useQuery({
     queryKey: ["articles-home"],
@@ -89,6 +118,29 @@ export default function Home() {
                 </Pressable>
               ) : null}
             </View>
+
+            {!aboutDismissed && !searching ? (
+              <Pressable
+                testID="about-welcome-banner"
+                onPress={() => router.push("/about")}
+                style={styles.aboutBanner}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.aboutBannerTitle}>✨  Benvenuto in Conoscenza Aperta</Text>
+                  <Text style={styles.aboutBannerBody}>
+                    Scopri il progetto, gli ideatori e la nostra visione del Ben Essere →
+                  </Text>
+                </View>
+                <Pressable
+                  testID="dismiss-about-banner"
+                  onPress={(e) => { e.stopPropagation?.(); dismissAbout(); }}
+                  hitSlop={12}
+                  style={styles.aboutClose}
+                >
+                  <Text style={{ color: colors.muted, fontSize: 18 }}>✕</Text>
+                </Pressable>
+              </Pressable>
+            ) : null}
 
             {searching ? (
               <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
@@ -261,5 +313,34 @@ const styles = StyleSheet.create({
     right: spacing.md,
     top: 10,
     padding: 4,
+  },
+  aboutBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    gap: spacing.md,
+  },
+  aboutBannerTitle: {
+    color: colors.brandPrimary,
+    fontWeight: "800",
+    fontSize: 14,
+  },
+  aboutBannerBody: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    lineHeight: 17,
+  },
+  aboutClose: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

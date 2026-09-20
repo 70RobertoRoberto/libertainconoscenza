@@ -103,6 +103,16 @@ export default function Profile() {
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>ℹ️  Il nostro progetto</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-about"
+          label="Chi Siamo"
+          onPress={() => router.push("/about")}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>🔐  Sicurezza</Text>
         <View style={{ height: spacing.md }} />
         <OutlineButton
