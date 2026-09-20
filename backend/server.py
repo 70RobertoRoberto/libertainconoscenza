@@ -911,6 +911,101 @@ async def change_password(inp: ChangePasswordIn, user: dict = Depends(current_us
     return {"ok": True}
 
 
+class DeleteMeIn(BaseModel):
+    current_password: str
+
+
+@api.post("/auth/delete-me")
+async def delete_me(inp: DeleteMeIn, user: dict = Depends(current_user)):
+    """Self-service account deletion. Requires current password confirmation.
+    Cascade-deletes favorites, comments, orders, views, completions, referrals.
+    Admins cannot delete themselves via this endpoint (must use admin flow)."""
+    full = await db.users.find_one({"id": user["id"]})
+    if not full:
+        raise HTTPException(404, "Utente non trovato")
+    if full.get("is_admin"):
+        raise HTTPException(400, "Gli amministratori non possono eliminarsi da soli. Contatta il supporto.")
+    if not check_password(inp.current_password, full["password_hash"]):
+        raise HTTPException(400, "Password errata")
+    uid = user["id"]
+    await db.favorites.delete_many({"user_id": uid})
+    await db.comments.delete_many({"user_id": uid})
+    await db.orders.delete_many({"user_id": uid})
+    await db.views.delete_many({"user_id": uid})
+    await db.completions.delete_many({"user_id": uid})
+    await db.referrals.delete_many({"user_id": uid})
+    await db.password_reset_requests.delete_many({"user_id": uid})
+    r = await db.users.delete_one({"id": uid})
+    return {"deleted": r.deleted_count}
+
+
+class PasswordResetRequestIn(BaseModel):
+    phone: str
+    email: Optional[str] = None
+    note: Optional[str] = Field(default=None, max_length=500)
+
+
+@api.post("/auth/password-reset-request")
+async def password_reset_request(inp: PasswordResetRequestIn):
+    """PUBLIC endpoint: user without a login submits a request to have their
+    password reset by an admin. We record the request; the admin sees it in the
+    admin panel and manually resets to a temporary password that the admin
+    communicates to the user via WhatsApp/email. Then the user should change it
+    from Profile → Sicurezza."""
+    phone = normalize_phone(inp.phone)
+    if not phone:
+        raise HTTPException(400, "Numero di telefono mancante")
+    user = await db.users.find_one({"phone": phone}, {"id": 1, "name": 1, "phone": 1})
+    # Deliberately don't leak whether the user exists — return generic OK.
+    # But we still only create a record if the phone is registered, otherwise skip.
+    if user:
+        await db.password_reset_requests.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "phone": phone,
+            "name": user.get("name") or "",
+            "email": (inp.email or "").strip()[:120],
+            "note": (inp.note or "").strip()[:500],
+            "status": "pending",
+            "created_at": now_iso(),
+        })
+    return {"ok": True, "message": "Se il numero è registrato, riceverai istruzioni sulla nuova password via WhatsApp o email."}
+
+
+@api.get("/admin/password-reset-requests", dependencies=[Depends(require_admin)])
+async def list_password_reset_requests():
+    items = []
+    async for r in db.password_reset_requests.find({}, {"_id": 0}).sort("created_at", -1):
+        items.append(r)
+    return {"items": items}
+
+
+class AdminResetPasswordIn(BaseModel):
+    user_id: str
+    new_password: str = Field(min_length=6, max_length=128)
+    request_id: Optional[str] = None
+
+
+@api.post("/admin/reset-user-password")
+async def admin_reset_user_password(inp: AdminResetPasswordIn, admin: dict = Depends(current_user)):
+    """Admin sets a new password for a user (typically fulfilling a reset request)."""
+    if not admin.get("is_admin"):
+        raise HTTPException(403, "Solo admin")
+    target = await db.users.find_one({"id": inp.user_id})
+    if not target:
+        raise HTTPException(404, "Utente non trovato")
+    await db.users.update_one(
+        {"id": inp.user_id},
+        {"$set": {"password_hash": hash_password(inp.new_password)}},
+    )
+    if inp.request_id:
+        await db.password_reset_requests.update_one(
+            {"id": inp.request_id},
+            {"$set": {"status": "done", "resolved_at": now_iso(), "resolved_by": admin["id"]}},
+        )
+    return {"ok": True, "phone": target["phone"]}
+
+
 # ---------------------------------------------------------------------------
 # Articles
 # ---------------------------------------------------------------------------

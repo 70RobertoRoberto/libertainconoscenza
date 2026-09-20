@@ -104,6 +104,16 @@ export default function Login() {
             inputStyle={styles.input}
           />
 
+          <Pressable
+            testID="go-forgot-password"
+            onPress={() => router.push("/forgot-password")}
+            style={{ marginTop: spacing.md, alignItems: "flex-end" }}
+          >
+            <Text style={{ color: colors.brandPrimary, fontSize: 13, fontWeight: "600" }}>
+              Password dimenticata?
+            </Text>
+          </Pressable>
+
           {err ? <Text style={styles.err}>{err}</Text> : null}
 
           <GoldButton

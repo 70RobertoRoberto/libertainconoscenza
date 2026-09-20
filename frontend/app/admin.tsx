@@ -24,7 +24,7 @@ const CATEGORIES = [
   "Filosofia", "Nutrizione", "Somatognostica", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders";
+type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets";
 
 export default function Admin() {
   const router = useRouter();
@@ -42,6 +42,7 @@ export default function Admin() {
     { key: "messages", label: "Messaggi" },
     { key: "users", label: "Utenti" },
     { key: "orders", label: "Ordini" },
+    { key: "resets", label: "Reset PW" },
   ];
 
   return (
@@ -88,6 +89,7 @@ export default function Admin() {
         {section === "messages" && <MessagesSection />}
         {section === "users" && <UsersSection />}
         {section === "orders" && <OrdersSection />}
+        {section === "resets" && <ResetsSection />}
       </KeyboardAvoidingView>
     </View>
   );
@@ -901,6 +903,87 @@ function OrdersSection() {
   );
 }
 
+function ResetsSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const { data } = useQuery({
+    queryKey: ["admin-resets"],
+    queryFn: () => api<any>("/admin/password-reset-requests"),
+  });
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const suggest = () => {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let s = "";
+    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s + "!";
+  };
+
+  const fulfill = (r: any) => {
+    const newPw = (typeof window !== "undefined" && Platform.OS === "web"
+      ? window.prompt(`Password temporanea per ${r.name || r.phone}:`, suggest())
+      : suggest());
+    if (!newPw || newPw.length < 6) return;
+    setBusyId(r.id);
+    api("/admin/reset-user-password", {
+      method: "POST",
+      body: JSON.stringify({ user_id: r.user_id, new_password: newPw, request_id: r.id }),
+    })
+      .then(() => {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          window.alert(`Password reimpostata a: ${newPw}\nComunicala all'utente via WhatsApp/email.`);
+        }
+        qc.invalidateQueries({ queryKey: ["admin-resets"] });
+      })
+      .finally(() => setBusyId(null));
+  };
+
+  const items: any[] = data?.items || [];
+  const pending = items.filter((r) => r.status === "pending");
+  const done = items.filter((r) => r.status !== "pending");
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <Text style={styles.h2}>Richieste in attesa ({pending.length})</Text>
+      {pending.length === 0 ? (
+        <Muted style={{ marginTop: spacing.md }}>Nessuna richiesta pendente.</Muted>
+      ) : null}
+      {pending.map((r) => (
+        <Card key={r.id} style={{ marginTop: spacing.md }}>
+          <Text style={styles.itemTitle}>{r.name || "—"}</Text>
+          <Muted style={{ fontSize: 12 }}>{r.phone}{r.email ? `  ·  ${r.email}` : ""}</Muted>
+          {r.note ? <Muted style={{ marginTop: 6, fontSize: 12, fontStyle: "italic" }}>“{r.note}”</Muted> : null}
+          <Muted style={{ marginTop: 6, fontSize: 11 }}>{new Date(r.created_at).toLocaleString()}</Muted>
+          <Pressable
+            testID={`fulfill-${r.id}`}
+            onPress={() => fulfill(r)}
+            disabled={busyId === r.id}
+            style={[styles.dangerBtn, { marginTop: spacing.md, backgroundColor: colors.brandPrimary }]}
+          >
+            <Text style={[styles.dangerTxt, { color: colors.surface }]}>
+              {busyId === r.id ? "…" : "Genera password temporanea"}
+            </Text>
+          </Pressable>
+        </Card>
+      ))}
+      {done.length > 0 ? (
+        <>
+          <Text style={[styles.h2, { marginTop: spacing.xxxl }]}>Risolte ({done.length})</Text>
+          {done.map((r) => (
+            <Card key={r.id} style={{ marginTop: spacing.sm, opacity: 0.65 }}>
+              <Text style={styles.itemTitle}>{r.name || "—"}</Text>
+              <Muted style={{ fontSize: 12 }}>{r.phone}</Muted>
+              <Muted style={{ fontSize: 11, marginTop: 4 }}>
+                Risolta il {new Date(r.resolved_at || r.created_at).toLocaleString()}
+              </Muted>
+            </Card>
+          ))}
+        </>
+      ) : null}
+    </ScrollView>
+  );
+}
+
 const styles = StyleSheet.create({
   title: { color: colors.onSurface, fontSize: 24, fontWeight: "700" },
   chip: {
@@ -940,6 +1023,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   itemTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "600" },
+  h2: { color: colors.onSurface, fontSize: 16, fontWeight: "800", marginBottom: spacing.sm },
   checkbox: {
     width: 32, height: 32, alignItems: "center", justifyContent: "center",
   },

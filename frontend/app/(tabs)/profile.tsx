@@ -132,6 +132,12 @@ export default function Profile() {
           label="Cambia password"
           onPress={() => router.push("/change-password")}
         />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="go-delete-account"
+          label="Elimina il mio account"
+          onPress={() => router.push("/delete-account")}
+        />
       </Card>
 
       {stats && (

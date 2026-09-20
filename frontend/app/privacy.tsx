@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/src/theme";
 
 const APP_NAME = "Conoscenza Aperta";
-const CONTACT_EMAIL = "info@conoscenzaaperta.it"; // segnaposto — sostituire con email reale
+const CONTACT_EMAIL = "info@scienzebiofisiche.it";
 
 const SECTIONS: { title: string; body: string }[] = [
   {
