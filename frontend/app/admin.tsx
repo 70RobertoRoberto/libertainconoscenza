@@ -713,23 +713,123 @@ function MessagesSection() {
 /* ─────── Users ─────── */
 function UsersSection() {
   const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin-users"], queryFn: () => api<any>("/admin/users") });
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [busy, setBusy] = useState(false);
+
+  const items: any[] = data?.items || [];
+  const selectedIds = Object.keys(selected).filter((k) => selected[k]);
+  const deletableItems = items.filter((u) => !u.is_admin);
+  const allDeletableSelected = deletableItems.length > 0 && deletableItems.every((u) => selected[u.id]);
+
+  const toggle = (id: string) => {
+    setSelected((s) => ({ ...s, [id]: !s[id] }));
+  };
+  const toggleAll = () => {
+    if (allDeletableSelected) {
+      setSelected({});
+    } else {
+      const next: Record<string, boolean> = {};
+      deletableItems.forEach((u) => (next[u.id] = true));
+      setSelected(next);
+    }
+  };
+
+  const confirmAndDelete = (msg: string, doIt: () => Promise<void>) => {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined" && !window.confirm(msg)) return;
+      doIt();
+    } else {
+      import("react-native").then(({ Alert }) => {
+        Alert.alert("Conferma", msg, [
+          { text: "Annulla", style: "cancel" },
+          { text: "Elimina", style: "destructive", onPress: doIt },
+        ]);
+      });
+    }
+  };
+
+  const deleteOne = (u: any) => {
+    confirmAndDelete(
+      `Eliminare l'utente ${u.name || u.phone}?\nVerranno cancellati anche i suoi commenti, preferiti e ordini.`,
+      async () => {
+        setBusy(true);
+        try {
+          await api(`/admin/users/${u.id}`, { method: "DELETE" });
+          qc.invalidateQueries({ queryKey: ["admin-users"] });
+          qc.invalidateQueries({ queryKey: ["stats-summary"] });
+        } finally { setBusy(false); }
+      },
+    );
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.length === 0) return;
+    confirmAndDelete(
+      `Eliminare ${selectedIds.length} utenti selezionati?\nOperazione non reversibile.`,
+      async () => {
+        setBusy(true);
+        try {
+          await api(`/admin/users/bulk-delete`, {
+            method: "POST",
+            body: JSON.stringify({ ids: selectedIds }),
+          });
+          setSelected({});
+          qc.invalidateQueries({ queryKey: ["admin-users"] });
+          qc.invalidateQueries({ queryKey: ["stats-summary"] });
+        } finally { setBusy(false); }
+      },
+    );
+  };
+
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
-      {(data?.items || []).map((u: any) => (
-        <View key={u.id} style={styles.itemRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.itemTitle}>{u.name || "—"}</Text>
-            <Muted style={{ fontSize: 12 }}>{u.phone}</Muted>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+        <Pressable testID="toggle-all-users" onPress={toggleAll} style={styles.selAllBtn}>
+          <Text style={styles.selAllTxt}>
+            {allDeletableSelected ? "☑︎  Deseleziona tutti" : "☐  Seleziona tutti"}
+          </Text>
+        </Pressable>
+        {selectedIds.length > 0 ? (
+          <Pressable testID="delete-selected-users" onPress={deleteSelected} style={styles.dangerBtn} disabled={busy}>
+            <Text style={styles.dangerTxt}>{busy ? "…" : `Elimina (${selectedIds.length})`}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      {items.map((u: any) => {
+        const isChecked = !!selected[u.id];
+        return (
+          <View key={u.id} style={styles.userRow}>
+            <Pressable
+              testID={`sel-user-${u.id}`}
+              onPress={() => !u.is_admin && toggle(u.id)}
+              disabled={u.is_admin}
+              style={styles.checkbox}
+            >
+              <Text style={{ fontSize: 16, color: u.is_admin ? colors.muted : (isChecked ? colors.brandPrimary : colors.onSurfaceTertiary) }}>
+                {u.is_admin ? "🔒" : (isChecked ? "☑︎" : "☐")}
+              </Text>
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.itemTitle}>{u.name || "—"}</Text>
+              <Muted style={{ fontSize: 12 }}>{u.phone}</Muted>
+            </View>
+            <View style={{ alignItems: "flex-end", marginRight: spacing.sm }}>
+              <Text style={{ color: u.subscription?.status === "premium" ? colors.brandPrimary : colors.muted, fontSize: 12, fontWeight: "700" }}>
+                {u.subscription?.status === "premium" ? "PREMIUM" : "GRATUITO"}
+              </Text>
+              {u.is_admin ? <Text style={{ color: colors.success, fontSize: 10 }}>ADMIN</Text> : null}
+            </View>
+            {!u.is_admin ? (
+              <Pressable testID={`del-user-${u.id}`} onPress={() => deleteOne(u)} style={styles.iconBtn} disabled={busy}>
+                <Text style={{ color: colors.error, fontSize: 18 }}>🗑</Text>
+              </Pressable>
+            ) : null}
           </View>
-          <View style={{ alignItems: "flex-end" }}>
-            <Text style={{ color: u.subscription?.status === "premium" ? colors.brandPrimary : colors.muted, fontSize: 12, fontWeight: "700" }}>
-              {u.subscription?.status === "premium" ? "PREMIUM" : "GRATUITO"}
-            </Text>
-            {u.is_admin ? <Text style={{ color: colors.success, fontSize: 10 }}>ADMIN</Text> : null}
-          </View>
-        </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }
@@ -809,6 +909,25 @@ const styles = StyleSheet.create({
   },
   itemTitle: { color: colors.onSurface, fontSize: 14, fontWeight: "600" },
   checkbox: {
-    width: 20, height: 20, borderWidth: 2, borderColor: colors.brandPrimary, borderRadius: 4,
+    width: 32, height: 32, alignItems: "center", justifyContent: "center",
   },
+  userRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider,
+    gap: spacing.sm,
+  },
+  iconBtn: {
+    width: 36, height: 36, alignItems: "center", justifyContent: "center",
+    borderRadius: radius.md,
+  },
+  selAllBtn: {
+    paddingHorizontal: spacing.md, paddingVertical: 8,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border,
+  },
+  selAllTxt: { color: colors.onSurfaceSecondary, fontSize: 12, fontWeight: "600" },
+  dangerBtn: {
+    paddingHorizontal: spacing.lg, paddingVertical: 10,
+    borderRadius: radius.pill, backgroundColor: colors.error,
+  },
+  dangerTxt: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
 });

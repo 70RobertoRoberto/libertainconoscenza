@@ -1182,6 +1182,61 @@ async def list_users():
     return {"items": items}
 
 
+@api.delete("/admin/users/{user_id}")
+async def delete_user(user_id: str, admin: dict = Depends(current_user)):
+    """Admin: delete a user and their related data (favorites, comments, orders,
+    referrals, views, completions). Prevent deleting the last admin or yourself."""
+    if not admin.get("is_admin"):
+        raise HTTPException(403, "Solo admin")
+    target = await db.users.find_one({"id": user_id})
+    if not target:
+        raise HTTPException(404, "Utente non trovato")
+    if target["id"] == admin["id"]:
+        raise HTTPException(400, "Non puoi eliminare te stesso")
+    if target.get("is_admin"):
+        # Guard: keep at least one admin alive
+        remaining_admins = await db.users.count_documents({"is_admin": True, "id": {"$ne": user_id}})
+        if remaining_admins <= 0:
+            raise HTTPException(400, "Impossibile eliminare l'ultimo amministratore")
+    # Cascade delete related data
+    await db.favorites.delete_many({"user_id": user_id})
+    await db.comments.delete_many({"user_id": user_id})
+    await db.orders.delete_many({"user_id": user_id})
+    await db.views.delete_many({"user_id": user_id})
+    await db.completions.delete_many({"user_id": user_id})
+    await db.referrals.delete_many({"user_id": user_id})
+    r = await db.users.delete_one({"id": user_id})
+    return {"deleted": r.deleted_count, "phone": target["phone"]}
+
+
+@api.post("/admin/users/bulk-delete")
+async def bulk_delete_users(payload: dict, admin: dict = Depends(current_user)):
+    """Admin: delete multiple users by list of ids."""
+    if not admin.get("is_admin"):
+        raise HTTPException(403, "Solo admin")
+    ids = payload.get("ids") or []
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(400, "Lista ids mancante")
+    # Filter out admin and self
+    to_delete = []
+    async for u in db.users.find({"id": {"$in": ids}}, {"id": 1, "is_admin": 1}):
+        if u["id"] == admin["id"]:
+            continue
+        if u.get("is_admin"):
+            continue
+        to_delete.append(u["id"])
+    if not to_delete:
+        return {"deleted": 0}
+    await db.favorites.delete_many({"user_id": {"$in": to_delete}})
+    await db.comments.delete_many({"user_id": {"$in": to_delete}})
+    await db.orders.delete_many({"user_id": {"$in": to_delete}})
+    await db.views.delete_many({"user_id": {"$in": to_delete}})
+    await db.completions.delete_many({"user_id": {"$in": to_delete}})
+    await db.referrals.delete_many({"user_id": {"$in": to_delete}})
+    r = await db.users.delete_many({"id": {"$in": to_delete}})
+    return {"deleted": r.deleted_count}
+
+
 # ---------------------------------------------------------------------------
 # Statistics
 # ---------------------------------------------------------------------------
