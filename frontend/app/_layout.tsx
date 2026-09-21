@@ -10,6 +10,30 @@ import { initLang } from "@/src/i18n";
 
 LogBox.ignoreAllLogs(true);
 
+// Suppress noisy React Navigation "action 'RESET' ... was not handled"
+// error that fires in dev mode after data mutations (e.g. admin deleting a
+// media item) even though the app keeps working normally. The message is
+// harmless but overlays the whole screen in Expo Go.
+if (typeof globalThis !== "undefined") {
+  const _origError = console.error?.bind(console);
+  if (_origError) {
+    console.error = (...args: any[]) => {
+      try {
+        const first = args[0];
+        const msg = typeof first === "string" ? first : String(first || "");
+        if (
+          msg.includes("The action 'RESET'") ||
+          msg.includes("action 'RESET'") ||
+          msg.includes("was not handled by any navigator")
+        ) {
+          return; // swallow
+        }
+      } catch {}
+      _origError(...args);
+    };
+  }
+}
+
 // Expo Go on SDK 53+ removed remote-push support on Android and any call to
 // expo-notifications crashes the whole bundle. Detect Expo Go and skip.
 // Constants.appOwnership === "expo" only in Expo Go; undefined in dev builds.
