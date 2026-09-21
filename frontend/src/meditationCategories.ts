@@ -178,7 +178,9 @@ Questa sezione raccoglie una serie di meditazioni guidate. Ognuna ha uno scopo, 
 
 La meditazione è un ritorno. Un ritorno a te, alla calma, alla presenza, alla pace. Non serve andare lontano, non serve cercare fuori. È già qui, è già ora, è già tua.
 
-Buona pratica.`;
+Buona pratica.
+
+NOTA: Le Meditazioni sono pratiche per il Ben-Essere e non sono sostitutive delle terapie professionali. Chi ha un disagio è sempre opportuno che sia seguito da un professionista di settore e utilizzi la Meditazione come integrazione al lavoro su di sé in quanto non possono essere risolutive di una problematica.`;
 
 export function findCategoryBySlug(slug: string): MeditationCategory | undefined {
   return MEDITATION_CATEGORIES.find((c) => c.slug === slug);

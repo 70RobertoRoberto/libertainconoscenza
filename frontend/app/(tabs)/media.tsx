@@ -145,9 +145,16 @@ function MeditationContent({
       {/* About meditation - long structured text */}
       <View style={styles.aboutBox}>
         <Text style={styles.aboutTitle}>Cos&apos;è la meditazione</Text>
-        {MEDITATION_ABOUT_TEXT.split("\n\n").map((p, idx) => (
-          <Text key={idx} style={styles.aboutParagraph}>{p}</Text>
-        ))}
+        {MEDITATION_ABOUT_TEXT.split("\n\n").map((p, idx) => {
+          const isNote = p.trim().startsWith("NOTA:");
+          return isNote ? (
+            <View key={idx} style={styles.noteBox}>
+              <Text style={styles.noteTxt}>{p}</Text>
+            </View>
+          ) : (
+            <Text key={idx} style={styles.aboutParagraph}>{p}</Text>
+          );
+        })}
       </View>
     </>
   );
@@ -348,6 +355,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     marginBottom: spacing.md,
+  },
+  noteBox: {
+    marginTop: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandPrimary + "15",
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brandPrimary,
+  },
+  noteTxt: {
+    color: colors.onSurface,
+    fontSize: 13,
+    lineHeight: 20,
+    fontStyle: "italic",
   },
   emptyBox: {
     marginTop: spacing.lg,
