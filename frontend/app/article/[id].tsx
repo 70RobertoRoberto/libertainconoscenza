@@ -20,6 +20,7 @@ import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
+import Markdown from "react-native-markdown-display";
 
 export default function ArticleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -129,7 +130,9 @@ export default function ArticleDetail() {
           <Text style={styles.title}>{data.title}</Text>
           <Muted style={{ marginTop: spacing.sm }}>{data.views} {t("reads")}</Muted>
           <View style={styles.divider} />
-          <Text style={styles.body}>{data.summary}</Text>
+          <View style={styles.body}>
+            <Markdown style={markdownStyles as any}>{data.summary || ""}</Markdown>
+          </View>
           {data.source_url ? (
             /^https?:\/\//i.test(data.source_url) ? (
               <Pressable onPress={() => Linking.openURL(data.source_url)}>
@@ -307,3 +310,31 @@ const styles = StyleSheet.create({
   },
   shareTxt: { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 });
+
+// Markdown rendering styles that match the app theme
+const markdownStyles = {
+  body: { color: colors.onSurfaceSecondary, fontSize: 17, lineHeight: 28 },
+  paragraph: { color: colors.onSurfaceSecondary, fontSize: 17, lineHeight: 28, marginTop: 0, marginBottom: spacing.md },
+  strong: { color: colors.onSurface, fontWeight: "700" as const },
+  em: { fontStyle: "italic" as const, color: colors.onSurfaceSecondary },
+  heading1: { color: colors.brandPrimary, fontSize: 24, fontWeight: "800" as const, marginTop: spacing.xl, marginBottom: spacing.sm, lineHeight: 30 },
+  heading2: { color: colors.brandPrimary, fontSize: 20, fontWeight: "700" as const, marginTop: spacing.lg, marginBottom: spacing.sm, lineHeight: 26 },
+  heading3: { color: colors.onSurface, fontSize: 18, fontWeight: "700" as const, marginTop: spacing.md, marginBottom: 6, lineHeight: 24 },
+  heading4: { color: colors.onSurface, fontSize: 16, fontWeight: "700" as const, marginTop: spacing.md, marginBottom: 6 },
+  bullet_list: { marginBottom: spacing.md },
+  ordered_list: { marginBottom: spacing.md },
+  list_item: { color: colors.onSurfaceSecondary, fontSize: 17, lineHeight: 28, marginBottom: 4 },
+  blockquote: {
+    backgroundColor: colors.surfaceSecondary,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brandPrimary,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.md,
+    paddingVertical: spacing.sm,
+    marginVertical: spacing.md,
+    borderRadius: radius.sm,
+  },
+  code_inline: { backgroundColor: colors.surfaceTertiary, paddingHorizontal: 6, borderRadius: 4, color: colors.brandPrimary, fontSize: 15 },
+  link: { color: colors.brandPrimary, textDecorationLine: "underline" as const },
+  hr: { backgroundColor: colors.divider, height: 1, marginVertical: spacing.md },
+};

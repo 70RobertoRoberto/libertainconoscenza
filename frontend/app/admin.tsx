@@ -19,6 +19,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
+import MarkdownEditor from "@/src/MarkdownEditor";
 
 const CATEGORIES = [
   "Crescita personale", "Spirituale", "Fisica quantistica", "Meditazione",
@@ -357,15 +358,15 @@ function ArticlesSection() {
               placeholderTextColor={colors.muted}
               style={styles.input}
             />
-            <TextInput
-              testID="article-summary"
-              value={summary}
-              onChangeText={setSummary}
-              placeholder="Testo (max 25-30 righe)"
-              placeholderTextColor={colors.muted}
-              multiline
-              style={[styles.input, { minHeight: 140, textAlignVertical: "top", marginTop: spacing.md }]}
-            />
+            <View style={{ marginTop: spacing.md }}>
+              <MarkdownEditor
+                testID="article-summary"
+                value={summary}
+                onChangeText={setSummary}
+                placeholder="Testo dell'articolo (usa la barra sopra per formattare)"
+                minHeight={200}
+              />
+            </View>
           </>
         )}
 
@@ -453,15 +454,15 @@ function ArticlesSection() {
                 placeholderTextColor={colors.muted}
                 style={[styles.input, { marginTop: spacing.md }]}
               />
-              <TextInput
-                testID="edit-summary"
-                value={eSummary}
-                onChangeText={setESummary}
-                placeholder="Testo articolo"
-                placeholderTextColor={colors.muted}
-                multiline
-                style={[styles.input, { minHeight: 200, textAlignVertical: "top", marginTop: spacing.md }]}
-              />
+              <View style={{ marginTop: spacing.md }}>
+                <MarkdownEditor
+                  testID="edit-summary"
+                  value={eSummary}
+                  onChangeText={setESummary}
+                  placeholder="Testo articolo"
+                  minHeight={240}
+                />
+              </View>
               <TextInput
                 testID="edit-source"
                 value={eSource}
