@@ -20,6 +20,9 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
 import MarkdownEditor from "@/src/MarkdownEditor";
+import { MEDITATION_CATEGORIES as MED_CATS_CONST } from "@/src/meditationCategories";
+
+const MEDITATION_CATS = MED_CATS_CONST.map((c) => c.name);
 
 const CATEGORIES = [
   "Crescita personale", "Spirituale", "Fisica quantistica", "Meditazione",
@@ -530,6 +533,7 @@ function MediaSection() {
   const [thumb, setThumb] = useState("");
   const [kind, setKind] = useState<"meditation" | "video">("meditation");
   const [cat, setCat] = useState("Meditazione");
+  const [medCat, setMedCat] = useState<string>("Armonizzazione e Radicamento");
   const [duration, setDuration] = useState("");
   const [premium, setPremium] = useState(false);
   const [msg, setMsg] = useState("");
@@ -539,17 +543,20 @@ function MediaSection() {
     setLoading(true); setMsg("");
     try {
       if (!title || !url) throw new Error("Titolo e URL richiesti");
+      if (kind === "meditation" && !medCat) throw new Error("Seleziona una categoria di meditazione");
       await api("/admin/media", {
         method: "POST",
         body: JSON.stringify({
           title, description: desc, media_url: url,
           thumbnail_url: thumb || null, kind, category: cat,
+          meditation_category: kind === "meditation" ? medCat : null,
           duration_sec: duration ? parseInt(duration) * 60 : null,
           is_premium: premium,
         }),
       });
       setTitle(""); setDesc(""); setUrl(""); setThumb(""); setDuration("");
       qc.invalidateQueries({ queryKey: ["admin-media"] });
+      qc.invalidateQueries({ queryKey: ["meditation-categories"] });
       setMsg("Contenuto caricato");
     } catch (e: any) { setMsg(e.message); }
     finally { setLoading(false); }
@@ -657,6 +664,27 @@ function MediaSection() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {kind === "meditation" ? (
+          <>
+            <Muted style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+              Categoria della meditazione (obbligatoria)
+            </Muted>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              {MEDITATION_CATS.map((c) => (
+                <Pressable
+                  key={c}
+                  testID={`med-cat-chip-${c}`}
+                  onPress={() => setMedCat(c)}
+                  style={[styles.smallChip, medCat === c && styles.smallChipActive]}
+                >
+                  <Text style={medCat === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
         <Pressable onPress={() => setPremium(!premium)} style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <View style={[styles.checkbox, premium && { backgroundColor: colors.brandPrimary }]} />
           <Text style={{ color: colors.onSurface }}>Contenuto Premium</Text>
@@ -670,7 +698,9 @@ function MediaSection() {
         <View key={m.id} style={styles.itemRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.itemTitle} numberOfLines={1}>{m.title}</Text>
-            <Muted style={{ fontSize: 11 }}>{m.kind} · {m.category} · {m.views} viste{m.is_premium ? " · PREMIUM" : ""}</Muted>
+            <Muted style={{ fontSize: 11 }}>
+              {m.kind}{m.meditation_category ? ` · ${m.meditation_category}` : ` · ${m.category}`} · {m.views} viste{m.is_premium ? " · PREMIUM" : ""}
+            </Muted>
           </View>
           <Pressable onPress={() => remove(m.id)}>
             <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>

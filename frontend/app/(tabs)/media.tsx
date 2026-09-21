@@ -1,12 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   Pressable,
   Image,
-  ScrollView,
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
@@ -14,94 +13,79 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
-import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
-import { Muted } from "@/src/ui";
-import { useLang, catLabel } from "@/src/i18n";
-
-const KINDS_KEYS = [
-  { key: "all", labelKey: "all_media" as const },
-  { key: "meditation", labelKey: "meditations" as const },
-  { key: "video", labelKey: "videos" as const },
-];
+import { useLang } from "@/src/i18n";
+import {
+  MEDITATION_CATEGORIES,
+  MEDITATION_HERO_IMAGE,
+  MEDITATION_ABOUT_TEXT,
+} from "@/src/meditationCategories";
 
 export default function Media() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [kind, setKind] = useState("all");
-  const { t, lang } = useLang();
+  const { t } = useLang();
 
+  // Fetch category counts (how many meditations per category)
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ["media", kind],
-    queryFn: () => api<{ items: any[] }>(`/media${kind === "all" ? "" : `?kind=${kind}`}`),
+    queryKey: ["meditation-categories"],
+    queryFn: () => api<{ items: { name: string; slug: string; count: number }[] }>("/meditation-categories"),
   });
+  const counts: Record<string, number> = React.useMemo(() => {
+    const m: Record<string, number> = {};
+    (data?.items || []).forEach((c) => (m[c.name] = c.count));
+    return m;
+  }, [data]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
-      <View style={{ paddingTop: insets.top + spacing.md, paddingBottom: spacing.md }}>
-        <Text style={styles.title}>{t("media_title")}</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: spacing.sm }}
-          style={{ marginTop: spacing.md }}
-        >
-          {KINDS_KEYS.map((k) => {
-            const active = k.key === kind;
-            return (
-              <Pressable
-                key={k.key}
-                testID={`kind-chip-${k.key}`}
-                onPress={() => setKind(k.key)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{t(k.labelKey)}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colors.surface }}
+      contentContainerStyle={{
+        paddingTop: insets.top + spacing.md,
+        paddingBottom: insets.bottom + spacing.xxxl,
+      }}
+      refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.brandPrimary} />}
+    >
+      {/* Title */}
+      <Text style={styles.title}>{t("meditations")}</Text>
+
+      {/* Hero image */}
+      <View style={styles.heroWrap}>
+        <Image source={{ uri: MEDITATION_HERO_IMAGE }} style={styles.hero} resizeMode="cover" />
+        <View style={styles.heroFade} />
       </View>
 
-      <FlatList
-        data={data?.items || []}
-        keyExtractor={(x) => x.id}
-        contentContainerStyle={{ paddingBottom: spacing.xxxl, paddingHorizontal: spacing.xl }}
-        refreshControl={<RefreshControl refreshing={isFetching} onRefresh={refetch} tintColor={colors.brandPrimary} />}
-        ListEmptyComponent={
-          <View style={{ padding: spacing.xxxl, alignItems: "center" }}>
-            <Muted>{t("no_content")}</Muted>
-          </View>
-        }
-        renderItem={({ item }) => (
+      {/* Category grid */}
+      <Text style={styles.sectionTitle}>Categorie</Text>
+      <View style={styles.grid}>
+        {MEDITATION_CATEGORIES.map((cat) => (
           <Pressable
-            testID={`media-row-${item.id}`}
-            onPress={() => router.push(`/media/${item.id}`)}
-            style={styles.row}
+            key={cat.slug}
+            testID={`med-cat-${cat.slug}`}
+            onPress={() => router.push(`/meditation-category/${cat.slug}` as any)}
+            style={styles.card}
           >
-            <Image
-              source={{ uri: item.thumbnail_url || CATEGORY_IMAGES[item.category] || DEFAULT_IMAGE }}
-              style={styles.thumb}
-            />
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={styles.kind}>{item.kind === "meditation" ? t("meditations").toUpperCase() : t("videos").toUpperCase()}</Text>
-              <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
-              <View style={{ flexDirection: "row", marginTop: 4, gap: spacing.sm }}>
-                <Muted style={{ fontSize: 11 }}>{catLabel(item.category, lang)}</Muted>
-                {item.duration_sec ? (
-                  <Muted style={{ fontSize: 11 }}>{`· ${Math.round(item.duration_sec / 60)} ${t("minutes")}`}</Muted>
-                ) : null}
-              </View>
+            <Image source={{ uri: cat.image }} style={styles.cardImg} resizeMode="cover" />
+            <View style={styles.cardOverlay} />
+            <View style={styles.cardTextWrap}>
+              <Text style={styles.cardTitle} numberOfLines={3}>{cat.name}</Text>
+              <Text style={styles.cardCount}>
+                {counts[cat.name] > 0 ? `${counts[cat.name]} meditazioni` : "Nessuna meditazione"}
+              </Text>
             </View>
-            {item.is_premium ? (
-              <View style={styles.pBadge}>
-                <Text style={styles.pTxt}>{t("premium").toUpperCase().slice(0,3)}</Text>
-              </View>
-            ) : null}
           </Pressable>
-        )}
-      />
-    </View>
+        ))}
+      </View>
+
+      {/* About meditation */}
+      <View style={styles.aboutBox}>
+        <Text style={styles.aboutTitle}>Cos&apos;è la meditazione</Text>
+        <Text style={styles.aboutBody}>{MEDITATION_ABOUT_TEXT}</Text>
+      </View>
+    </ScrollView>
   );
 }
+
+const CARD_MARGIN = spacing.md;
 
 const styles = StyleSheet.create({
   title: {
@@ -110,34 +94,95 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     paddingHorizontal: spacing.xl,
   },
-  chip: {
-    height: 36,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
+  heroWrap: {
+    marginTop: spacing.md,
+    marginHorizontal: spacing.xl,
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    height: 180,
+    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+    borderColor: colors.brandPrimary + "30",
   },
-  chipActive: { backgroundColor: colors.brandPrimary, borderColor: colors.brandPrimary },
-  chipText: { color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600" },
-  chipTextActive: { color: colors.onBrandPrimary },
-  row: {
+  hero: { width: "100%", height: "100%" },
+  heroFade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.15)",
+  },
+  sectionTitle: {
+    color: colors.brandPrimary,
+    letterSpacing: 3,
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: spacing.xl,
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+    textTransform: "uppercase",
+  },
+  grid: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    flexWrap: "wrap",
+    paddingHorizontal: spacing.xl - CARD_MARGIN / 2,
   },
-  thumb: { width: 100, height: 100, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
-  kind: { color: colors.brandPrimary, fontSize: 10, fontWeight: "700", letterSpacing: 1 },
-  rowTitle: { color: colors.onSurface, fontSize: 15, fontWeight: "600", marginTop: 4 },
-  pBadge: {
-    backgroundColor: colors.brandPrimary,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
+  card: {
+    width: "50%",
+    aspectRatio: 1,
+    padding: CARD_MARGIN / 2,
   },
-  pTxt: { color: colors.onBrandPrimary, fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  cardImg: {
+    ...StyleSheet.absoluteFillObject,
+    margin: CARD_MARGIN / 2,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  cardOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    margin: CARD_MARGIN / 2,
+    borderRadius: radius.md,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    borderWidth: 1,
+    borderColor: colors.brandPrimary + "40",
+  },
+  cardTextWrap: {
+    ...StyleSheet.absoluteFillObject,
+    margin: CARD_MARGIN / 2,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    justifyContent: "flex-end",
+  },
+  cardTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 20,
+  },
+  cardCount: {
+    color: colors.brandPrimary,
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  aboutBox: {
+    marginTop: spacing.xl,
+    marginHorizontal: spacing.xl,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brandPrimary,
+  },
+  aboutTitle: {
+    color: colors.brandPrimary,
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: spacing.sm,
+    letterSpacing: 0.5,
+  },
+  aboutBody: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    fontStyle: "italic",
+  },
 });

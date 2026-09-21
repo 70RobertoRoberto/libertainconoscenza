@@ -67,6 +67,19 @@ CATEGORIES = [
     "Video",
 ]
 
+# Meditation-specific subcategories (alphabetical). Used when kind == "meditation".
+MEDITATION_CATEGORIES = [
+    "Armonizzazione e Radicamento",
+    "Autostima",
+    "Calma e Serenità",
+    "Concentrazione e Attenzione",
+    "Perdono",
+    "Presenza e Ascolto Interiore",
+    "Ricarica energetica",
+    "Rilassamento",
+    "Sonno",
+]
+
 PLANS = {
     "24h": {"days": 1, "months": 0, "price_eur": 10, "label": "24 Ore"},
     "1w": {"days": 7, "months": 0, "price_eur": 50, "label": "1 Settimana"},
@@ -132,6 +145,7 @@ class MediaIn(BaseModel):
     description: str = ""
     category: str
     kind: str  # "video" or "meditation"
+    meditation_category: Optional[str] = None  # one of MEDITATION_CATEGORIES when kind=="meditation"
     media_url: str  # external link or storage URL
     thumbnail_url: Optional[str] = None
     duration_sec: Optional[int] = None
@@ -144,6 +158,7 @@ class MediaOut(BaseModel):
     description: str
     category: str
     kind: str
+    meditation_category: Optional[str] = None
     media_url: str
     thumbnail_url: Optional[str] = None
     duration_sec: Optional[int] = None
@@ -1177,6 +1192,7 @@ def _serialize_media(m: dict) -> dict:
         "description": m.get("description", ""),
         "category": m["category"],
         "kind": m["kind"],
+        "meditation_category": m.get("meditation_category"),
         "media_url": m["media_url"],
         "thumbnail_url": m.get("thumbnail_url"),
         "duration_sec": m.get("duration_sec"),
@@ -1190,16 +1206,52 @@ def _serialize_media(m: dict) -> dict:
 async def list_media(
     kind: Optional[str] = None,
     category: Optional[str] = None,
+    meditation_category: Optional[str] = None,
     user: dict = Depends(current_user),
 ):
-    q = {}
+    q: dict = {}
     if kind:
         q["kind"] = kind
     if category:
         q["category"] = category
+    if meditation_category:
+        q["meditation_category"] = meditation_category
     cursor = db.media.find(q, {"_id": 0}).sort("created_at", -1)
     items = [_serialize_media(m) async for m in cursor]
     return {"items": items}
+
+
+@api.get("/meditation-categories")
+async def list_meditation_categories(_: dict = Depends(current_user)):
+    """Return the 9 meditation categories, alphabetical, with count of media items."""
+    pipeline = [
+        {"$match": {"kind": "meditation", "meditation_category": {"$ne": None}}},
+        {"$group": {"_id": "$meditation_category", "count": {"$sum": 1}}},
+    ]
+    counts: dict = {}
+    async for row in db.media.aggregate(pipeline):
+        counts[row["_id"]] = row["count"]
+    return {
+        "items": [
+            {"name": name, "slug": _cat_slug(name), "count": counts.get(name, 0)}
+            for name in MEDITATION_CATEGORIES
+        ]
+    }
+
+
+def _cat_slug(name: str) -> str:
+    import re as _re
+    s = name.lower()
+    s = s.replace("à", "a").replace("è", "e").replace("é", "e").replace("ì", "i").replace("ò", "o").replace("ù", "u")
+    s = _re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s
+
+
+def _slug_to_category(slug: str) -> Optional[str]:
+    for name in MEDITATION_CATEGORIES:
+        if _cat_slug(name) == slug:
+            return name
+    return None
 
 
 @api.get("/media/{media_id}")
@@ -1229,6 +1281,8 @@ async def create_media(inp: MediaIn):
         raise HTTPException(400, "Categoria non valida")
     if inp.kind not in ("video", "meditation"):
         raise HTTPException(400, "kind deve essere 'video' o 'meditation'")
+    if inp.kind == "meditation" and inp.meditation_category and inp.meditation_category not in MEDITATION_CATEGORIES:
+        raise HTTPException(400, "Categoria meditazione non valida")
     doc = {
         "id": str(uuid.uuid4()),
         **inp.dict(),
