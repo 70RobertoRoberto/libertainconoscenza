@@ -73,10 +73,27 @@ export default function MeditationCategoryScreen() {
         </View>
       </View>
 
-      {/* Description */}
+      {/* Description - full text, paragraphed */}
       <View style={styles.section}>
-        <Text style={styles.description}>{category.description}</Text>
+        {category.description.split("\n\n").map((p, idx) => (
+          <Text key={idx} style={styles.description}>
+            {p}
+          </Text>
+        ))}
       </View>
+
+      {/* "A cosa serve" benefits */}
+      {category.benefits.length > 0 ? (
+        <View style={styles.benefitsBox}>
+          <Text style={styles.benefitsTitle}>A cosa serve</Text>
+          {category.benefits.map((b, i) => (
+            <View key={i} style={styles.benefitRow}>
+              <Text style={styles.benefitBullet}>•</Text>
+              <Text style={styles.benefitTxt}>{b}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {/* List of meditations */}
       <Text style={styles.listHeader}>Meditazioni</Text>
@@ -182,7 +199,41 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceSecondary,
     fontSize: 15,
     lineHeight: 24,
-    fontStyle: "italic",
+    marginBottom: spacing.md,
+  },
+  benefitsBox: {
+    marginHorizontal: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.brandPrimary,
+    marginBottom: spacing.lg,
+  },
+  benefitsTitle: {
+    color: colors.brandPrimary,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginBottom: spacing.sm,
+  },
+  benefitRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 4,
+  },
+  benefitBullet: {
+    color: colors.brandPrimary,
+    fontSize: 16,
+    marginRight: spacing.sm,
+    lineHeight: 22,
+  },
+  benefitTxt: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    flex: 1,
   },
   listHeader: {
     color: colors.brandPrimary,
