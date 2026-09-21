@@ -131,10 +131,16 @@ export default function ArticleDetail() {
           <View style={styles.divider} />
           <Text style={styles.body}>{data.summary}</Text>
           {data.source_url ? (
-            <Pressable onPress={() => Linking.openURL(data.source_url)}>
-              <Text style={styles.source}>{t("source")}: {data.source_url}</Text>
-            </Pressable>
-          ) : null}
+            /^https?:\/\//i.test(data.source_url) ? (
+              <Pressable onPress={() => Linking.openURL(data.source_url)}>
+                <Text style={styles.source}>{t("source")}: {data.source_url}</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.source}>{t("editorial")}</Text>
+            )
+          ) : (
+            <Text style={styles.source}>{t("editorial")}</Text>
+          )}
 
           <View style={styles.commentsWrap}>
             <Text style={styles.cSection}>{t("comments")} ({comments?.items?.length || 0})</Text>

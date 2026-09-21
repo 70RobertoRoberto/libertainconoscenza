@@ -140,6 +140,7 @@ export const STRINGS = {
     download_cert: "🏅  Scarica attestato di completamento",
     // Article
     source: "Fonte",
+    editorial: "Articolo di Redazione",
     comments: "Commenti",
     write_comment: "Lascia un pensiero…",
     send: "Invia",
@@ -230,6 +231,7 @@ export const STRINGS = {
     unlock_premium: "Unlock Premium",
     download_cert: "🏅  Download completion certificate",
     source: "Source",
+    editorial: "Editorial article",
     comments: "Comments",
     write_comment: "Leave a thought…",
     send: "Send",
