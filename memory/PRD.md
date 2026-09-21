@@ -25,5 +25,9 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
 - Emergent Push (SuprSend) — delivery after native build + Firebase google-services.json for Android
 - YouTube RSS (15 latest); Data API v3 optional via YOUTUBE_API_KEY
 
+## Content
+- Articles: 62 total (as of latest seed)
+- Latest seed batch: 17 articles from genitorievoluti.it (Psicologia/Naturopatia/Crescita personale). Each ~1200-1650 words, LLM-rewritten with fresh titles, "Metodo Cosmo" → "Metodo Summa Aurea", themed Unsplash images. Script: `/app/backend/seed_genitori_articles.py`.
+
 ## Test credentials
 See `/app/memory/test_credentials.md`
