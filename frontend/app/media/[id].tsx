@@ -15,9 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
-import { Muted, GoldButton, OutlineButton } from "@/src/ui";
+import { Muted, GoldButton } from "@/src/ui";
 import { AudioPlayer } from "@/src/AudioPlayer";
-import { generateCertificate } from "@/src/certificate";
 import { useLang, catLabel } from "@/src/i18n";
 
 export default function MediaDetail() {
@@ -93,20 +92,6 @@ export default function MediaDetail() {
     } catch {}
   };
 
-  const downloadCert = async () => {
-    try {
-      const cert = await api<any>(`/certificate/${id}`);
-      await generateCertificate(cert);
-    } catch (e: any) {
-      // ensure completion then retry
-      await markComplete();
-      try {
-        const cert = await api<any>(`/certificate/${id}`);
-        await generateCertificate(cert);
-      } catch {}
-    }
-  };
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxxl }}>
@@ -154,13 +139,6 @@ export default function MediaDetail() {
               style={{ marginTop: spacing.xl }}
             />
           )}
-
-          <OutlineButton
-            testID="download-certificate"
-            label={t("download_cert")}
-            onPress={downloadCert}
-            style={{ marginTop: spacing.md }}
-          />
         </View>
       </ScrollView>
     </View>
