@@ -774,6 +774,68 @@ function AdsSection() {
     qc.invalidateQueries({ queryKey: ["admin-ads"] });
   };
 
+  const pickAndUploadImage = async () => {
+    setMsg("");
+    try {
+      const ImagePicker = await import("expo-image-picker");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        setMsg("Permesso galleria negato. Attivalo in Impostazioni → App → Expo Go → Permessi.");
+        return;
+      }
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? "Images",
+        allowsEditing: false,
+        quality: 0.85,
+        exif: false,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset: any = pick.assets[0];
+      setLoading(true);
+      const fileName = asset.fileName || `ad-${Date.now()}.jpg`;
+      setMsg(`Caricamento: ${fileName}…`);
+      const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const form = new FormData();
+      const inferredMime =
+        asset.mimeType ||
+        (fileName.toLowerCase().endsWith(".png") ? "image/png"
+          : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
+          : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
+          : "image/jpeg");
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, fileName);
+      } else {
+        form.append("file", { uri: asset.uri, name: fileName, type: inferredMime } as any);
+      }
+      const token =
+        (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
+        (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      if (!token) throw new Error("Non autenticato");
+      const res = await fetch(`${backend}/api/admin/upload`, {
+        method: "POST",
+        body: form as any,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const j = await res.json();
+      setImage(j.url);
+      const sizeKB = Math.round((j.size || 0) / 1024);
+      const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+      setMsg(`✅ Immagine caricata (${sizeStr}). Ora compila didascalia e URL click, poi salva.`);
+    } catch (e: any) {
+      setMsg(`Errore upload: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const previewUri = image
+    ? image.startsWith("/api/")
+      ? `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}${image}`
+      : image
+    : "";
+
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
       <Card>
@@ -781,7 +843,32 @@ function AdsSection() {
         <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
           Un banner viene mostrato agli utenti per 5 secondi ogni 10 minuti di uso dell'app.
         </Muted>
-        <TextInput testID="ad-image" value={image} onChangeText={setImage} placeholder="URL immagine (https://...)" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="none" />
+
+        {previewUri ? (
+          <Image
+            source={{ uri: previewUri }}
+            style={{ width: "100%", height: 160, borderRadius: radius.md, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt }}
+            resizeMode="cover"
+          />
+        ) : null}
+
+        <TextInput
+          testID="ad-image"
+          value={image}
+          onChangeText={setImage}
+          placeholder="URL immagine (https://...) oppure carica qui sotto ↓"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          autoCapitalize="none"
+        />
+        <GoldButton
+          testID="upload-ad-image"
+          label="📷 Carica immagine dal telefono"
+          onPress={pickAndUploadImage}
+          loading={loading}
+          style={{ marginTop: spacing.sm }}
+        />
+
         <TextInput testID="ad-caption" value={caption} onChangeText={setCaption} placeholder="Titolo/didascalia (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} />
         <TextInput testID="ad-click" value={click} onChangeText={setClick} placeholder="URL al click (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
         {msg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>{msg}</Text> : null}
