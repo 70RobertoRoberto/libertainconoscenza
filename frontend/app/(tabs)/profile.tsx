@@ -132,6 +132,12 @@ export default function Profile() {
           label="Privacy Policy"
           onPress={() => router.push("/privacy")}
         />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="go-disclaimer"
+          label="Disclaimer"
+          onPress={() => router.push("/disclaimer")}
+        />
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
