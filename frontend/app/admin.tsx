@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -178,7 +180,7 @@ function StatCard({ label, value, full }: { label: string; value: any; full?: bo
 function ArticlesSection() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
-  const { data } = useQuery({ queryKey: ["admin-articles"], queryFn: () => api<any>("/articles?limit=200") });
+  const { data } = useQuery({ queryKey: ["admin-articles"], queryFn: () => api<any>("/articles?limit=500") });
   const [mode, setMode] = useState<"manual" | "ai">("manual");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -187,6 +189,18 @@ function ArticlesSection() {
   const [premium, setPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+
+  // Edit modal state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [eTitle, setETitle] = useState("");
+  const [eSummary, setESummary] = useState("");
+  const [eCategory, setECategory] = useState("Crescita personale");
+  const [eImage, setEImage] = useState("");
+  const [eSource, setESource] = useState("");
+  const [ePremium, setEPremium] = useState(false);
+  const [eLoading, setELoading] = useState(false);
+  const [eMsg, setEMsg] = useState("");
+  const [search, setSearch] = useState("");
 
   const create = async () => {
     setLoading(true); setMsg("");
@@ -215,6 +229,102 @@ function ArticlesSection() {
     await api(`/admin/articles/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["admin-articles"] });
   };
+
+  const openEdit = async (id: string) => {
+    setEMsg("");
+    try {
+      const full = await api<any>(`/articles/${id}`);
+      setEditingId(id);
+      setETitle(full.title || "");
+      setESummary(full.summary || "");
+      setECategory(full.category || "Crescita personale");
+      setEImage(full.image_url || "");
+      setESource(full.source_url || "");
+      setEPremium(!!full.is_premium);
+    } catch (e: any) {
+      setEMsg(`Errore apertura: ${e.message}`);
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setELoading(true); setEMsg("");
+    try {
+      if (!eTitle.trim() || !eSummary.trim()) throw new Error("Titolo e testo richiesti");
+      await api(`/admin/articles/${editingId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          title: eTitle,
+          summary: eSummary,
+          category: eCategory,
+          image_url: eImage || null,
+          source_url: eSource || null,
+          is_premium: ePremium,
+        }),
+      });
+      qc.invalidateQueries({ queryKey: ["admin-articles"] });
+      setEditingId(null);
+    } catch (e: any) {
+      setEMsg(e.message);
+    } finally {
+      setELoading(false);
+    }
+  };
+
+  const pickAndUploadImage = async () => {
+    setEMsg("");
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({
+        type: ["image/*", "image/jpeg", "image/png", "image/webp"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset = pick.assets[0];
+      setELoading(true);
+      setEMsg(`Caricamento: ${asset.name || "immagine"}…`);
+      const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const form = new FormData();
+      const inferredMime =
+        asset.mimeType ||
+        (asset.name?.toLowerCase().endsWith(".png") ? "image/png"
+          : asset.name?.toLowerCase().endsWith(".webp") ? "image/webp"
+          : "image/jpeg");
+      if (Platform.OS === "web") {
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, asset.name || "image");
+      } else {
+        form.append("file", { uri: asset.uri, name: asset.name || "image", type: inferredMime } as any);
+      }
+      const token =
+        (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
+        (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      if (!token) throw new Error("Non autenticato");
+      const res = await fetch(`${backend}/api/admin/upload`, {
+        method: "POST",
+        body: form as any,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const j = await res.json();
+      setEImage(j.url);
+      setEMsg(`✅ Immagine caricata`);
+    } catch (e: any) {
+      setEMsg(`Errore upload: ${e.message}`);
+    } finally {
+      setELoading(false);
+    }
+  };
+
+  const filteredItems = useMemo(() => {
+    const items = (data?.items || []) as any[];
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((a) =>
+      (a.title || "").toLowerCase().includes(q) ||
+      (a.category || "").toLowerCase().includes(q)
+    );
+  }, [data, search]);
 
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
@@ -276,18 +386,121 @@ function ArticlesSection() {
         <GoldButton testID="save-article" label={mode === "ai" ? "Sintetizza e salva" : "Salva articolo"} onPress={create} loading={loading} style={{ marginTop: spacing.md }} />
       </Card>
 
-      <Text style={styles.section}>Articoli esistenti</Text>
-      {(data?.items || []).map((a: any) => (
+      <Text style={styles.section}>Articoli esistenti ({(data?.items || []).length})</Text>
+      <TextInput
+        testID="search-articles"
+        value={search}
+        onChangeText={setSearch}
+        placeholder="🔍 Cerca articolo per titolo o categoria…"
+        placeholderTextColor={colors.muted}
+        style={[styles.input, { marginBottom: spacing.sm }]}
+      />
+      {filteredItems.map((a: any) => (
         <View key={a.id} style={styles.itemRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.itemTitle} numberOfLines={1}>{a.title}</Text>
             <Muted style={{ fontSize: 11 }}>{a.category} · {a.views} letture{a.is_premium ? " · PREMIUM" : ""}</Muted>
           </View>
+          <Pressable testID={`edit-article-${a.id}`} onPress={() => openEdit(a.id)} style={{ marginRight: spacing.md }}>
+            <Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>Modifica</Text>
+          </Pressable>
           <Pressable testID={`del-article-${a.id}`} onPress={() => remove(a.id)}>
             <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
           </Pressable>
         </View>
       ))}
+
+      {/* --- Edit modal --- */}
+      <Modal visible={!!editingId} animationType="slide" transparent onRequestClose={() => setEditingId(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+              <Text style={{ color: colors.onSurface, fontSize: 18, fontWeight: "700" }}>Modifica articolo</Text>
+              <Pressable onPress={() => setEditingId(null)}>
+                <Text style={{ color: colors.muted, fontSize: 22 }}>✕</Text>
+              </Pressable>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing.xl }}>
+              {eImage ? (
+                <Image
+                  source={{ uri: eImage.startsWith("/api/") ? `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}${eImage}` : eImage }}
+                  style={{ width: "100%", height: 160, borderRadius: radius.md, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt }}
+                  resizeMode="cover"
+                />
+              ) : null}
+              <TextInput
+                testID="edit-image-url"
+                value={eImage}
+                onChangeText={setEImage}
+                placeholder="URL immagine (https://... oppure /api/files/...)"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                autoCapitalize="none"
+              />
+              <GoldButton
+                testID="upload-edit-image"
+                label="📷 Carica immagine dal telefono"
+                onPress={pickAndUploadImage}
+                loading={eLoading}
+                style={{ marginTop: spacing.sm }}
+              />
+
+              <TextInput
+                testID="edit-title"
+                value={eTitle}
+                onChangeText={setETitle}
+                placeholder="Titolo"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, { marginTop: spacing.md }]}
+              />
+              <TextInput
+                testID="edit-summary"
+                value={eSummary}
+                onChangeText={setESummary}
+                placeholder="Testo articolo"
+                placeholderTextColor={colors.muted}
+                multiline
+                style={[styles.input, { minHeight: 200, textAlignVertical: "top", marginTop: spacing.md }]}
+              />
+              <TextInput
+                testID="edit-source"
+                value={eSource}
+                onChangeText={setESource}
+                placeholder="Fonte (URL o vuoto per Articolo di Redazione)"
+                placeholderTextColor={colors.muted}
+                style={[styles.input, { marginTop: spacing.md }]}
+                autoCapitalize="none"
+              />
+
+              <Muted style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>Categoria</Muted>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                {CATEGORIES.map((c) => (
+                  <Pressable key={c} onPress={() => setECategory(c)} style={[styles.smallChip, eCategory === c && styles.smallChipActive]}>
+                    <Text style={eCategory === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <Pressable onPress={() => setEPremium(!ePremium)} style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <View style={[styles.checkbox, ePremium && { backgroundColor: colors.brandPrimary }]} />
+                <Text style={{ color: colors.onSurface }}>Contenuto Premium</Text>
+              </Pressable>
+
+              {eMsg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.md }}>{eMsg}</Text> : null}
+
+              <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xl }}>
+                <Pressable
+                  onPress={() => setEditingId(null)}
+                  style={[styles.smallChip, { paddingVertical: spacing.md, paddingHorizontal: spacing.xl, flex: 1, alignItems: "center" }]}
+                >
+                  <Text style={styles.smallChipTxt}>Annulla</Text>
+                </Pressable>
+                <GoldButton testID="save-edit-article" label="Salva modifiche" onPress={saveEdit} loading={eLoading} style={{ flex: 1 }} />
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1046,4 +1259,12 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill, backgroundColor: colors.error,
   },
   dangerTxt: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  modalBackdrop: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg,
+    padding: spacing.xl, maxHeight: "92%",
+    borderWidth: 1, borderColor: colors.border,
+  },
 });

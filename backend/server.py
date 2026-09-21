@@ -106,6 +106,15 @@ class ArticleIn(BaseModel):
     is_premium: bool = False
 
 
+class ArticlePatch(BaseModel):
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    category: Optional[str] = None
+    source_url: Optional[str] = None
+    image_url: Optional[str] = None
+    is_premium: Optional[bool] = None
+
+
 class ArticleOut(BaseModel):
     id: str
     title: str
@@ -1081,6 +1090,22 @@ async def create_article(inp: ArticleIn):
 async def delete_article(article_id: str):
     r = await db.articles.delete_one({"id": article_id})
     return {"deleted": r.deleted_count}
+
+
+@api.put("/admin/articles/{article_id}", dependencies=[Depends(require_admin)])
+async def update_article(article_id: str, inp: ArticlePatch):
+    existing = await db.articles.find_one({"id": article_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "Articolo non trovato")
+    updates = {k: v for k, v in inp.dict().items() if v is not None}
+    if not updates:
+        return _serialize_article(existing)
+    if "category" in updates and updates["category"] not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    updates["updated_at"] = now_iso()
+    await db.articles.update_one({"id": article_id}, {"$set": updates})
+    doc = await db.articles.find_one({"id": article_id}, {"_id": 0})
+    return _serialize_article(doc)
 
 
 @api.post("/admin/articles/summarize", dependencies=[Depends(require_admin)])
