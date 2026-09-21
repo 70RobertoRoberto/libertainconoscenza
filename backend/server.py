@@ -2102,6 +2102,155 @@ async def toggle_ad(ad_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Playlists (user-curated sequences of meditations)
+# ---------------------------------------------------------------------------
+class PlaylistCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class PlaylistRename(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+
+
+class PlaylistReorder(BaseModel):
+    media_ids: List[str]
+
+
+class PlaylistAddItem(BaseModel):
+    media_id: str
+
+
+def _serialize_playlist(p: dict, media_by_id: Optional[dict] = None) -> dict:
+    ids = p.get("media_ids", []) or []
+    items = []
+    if media_by_id is not None:
+        for mid in ids:
+            m = media_by_id.get(mid)
+            if m:
+                items.append(_serialize_media(m))
+    return {
+        "id": p["id"],
+        "name": p["name"],
+        "media_ids": ids,
+        "items": items,
+        "count": len(ids),
+        "created_at": p.get("created_at", ""),
+        "updated_at": p.get("updated_at", ""),
+    }
+
+
+@api.get("/playlists")
+async def list_playlists(user: dict = Depends(current_user)):
+    """List current user's playlists (with count only, not full items)."""
+    cursor = db.playlists.find({"user_id": user["id"]}, {"_id": 0}).sort("updated_at", -1)
+    out = []
+    async for p in cursor:
+        out.append({
+            "id": p["id"],
+            "name": p["name"],
+            "count": len(p.get("media_ids", []) or []),
+            "created_at": p.get("created_at", ""),
+            "updated_at": p.get("updated_at", ""),
+        })
+    return {"items": out}
+
+
+@api.post("/playlists")
+async def create_playlist(inp: PlaylistCreate, user: dict = Depends(current_user)):
+    now = now_iso()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "name": inp.name.strip(),
+        "media_ids": [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.playlists.insert_one(doc)
+    return _serialize_playlist(doc, {})
+
+
+@api.get("/playlists/{playlist_id}")
+async def get_playlist(playlist_id: str, user: dict = Depends(current_user)):
+    p = await db.playlists.find_one({"id": playlist_id, "user_id": user["id"]}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Playlist non trovata")
+    ids = p.get("media_ids", []) or []
+    media = {}
+    if ids:
+        async for m in db.media.find({"id": {"$in": ids}}, {"_id": 0}):
+            media[m["id"]] = m
+    return _serialize_playlist(p, media)
+
+
+@api.patch("/playlists/{playlist_id}")
+async def rename_playlist(playlist_id: str, inp: PlaylistRename, user: dict = Depends(current_user)):
+    r = await db.playlists.update_one(
+        {"id": playlist_id, "user_id": user["id"]},
+        {"$set": {"name": inp.name.strip(), "updated_at": now_iso()}},
+    )
+    if r.matched_count == 0:
+        raise HTTPException(404, "Playlist non trovata")
+    return {"ok": True}
+
+
+@api.delete("/playlists/{playlist_id}")
+async def delete_playlist(playlist_id: str, user: dict = Depends(current_user)):
+    r = await db.playlists.delete_one({"id": playlist_id, "user_id": user["id"]})
+    if r.deleted_count == 0:
+        raise HTTPException(404, "Playlist non trovata")
+    return {"ok": True}
+
+
+@api.post("/playlists/{playlist_id}/items")
+async def add_playlist_item(playlist_id: str, inp: PlaylistAddItem, user: dict = Depends(current_user)):
+    p = await db.playlists.find_one({"id": playlist_id, "user_id": user["id"]})
+    if not p:
+        raise HTTPException(404, "Playlist non trovata")
+    m = await db.media.find_one({"id": inp.media_id})
+    if not m:
+        raise HTTPException(404, "Meditazione non trovata")
+    ids = list(p.get("media_ids", []) or [])
+    if inp.media_id in ids:
+        return {"ok": True, "added": False, "reason": "already_present"}
+    ids.append(inp.media_id)
+    await db.playlists.update_one(
+        {"id": playlist_id},
+        {"$set": {"media_ids": ids, "updated_at": now_iso()}},
+    )
+    return {"ok": True, "added": True, "count": len(ids)}
+
+
+@api.delete("/playlists/{playlist_id}/items/{media_id}")
+async def remove_playlist_item(playlist_id: str, media_id: str, user: dict = Depends(current_user)):
+    p = await db.playlists.find_one({"id": playlist_id, "user_id": user["id"]})
+    if not p:
+        raise HTTPException(404, "Playlist non trovata")
+    ids = [x for x in (p.get("media_ids", []) or []) if x != media_id]
+    await db.playlists.update_one(
+        {"id": playlist_id},
+        {"$set": {"media_ids": ids, "updated_at": now_iso()}},
+    )
+    return {"ok": True, "count": len(ids)}
+
+
+@api.post("/playlists/{playlist_id}/reorder")
+async def reorder_playlist(playlist_id: str, inp: PlaylistReorder, user: dict = Depends(current_user)):
+    p = await db.playlists.find_one({"id": playlist_id, "user_id": user["id"]})
+    if not p:
+        raise HTTPException(404, "Playlist non trovata")
+    current = set(p.get("media_ids", []) or [])
+    submitted = list(dict.fromkeys(inp.media_ids))  # de-dup preserving order
+    if set(submitted) != current:
+        raise HTTPException(400, "L'elenco degli ID non corrisponde al contenuto della playlist")
+    await db.playlists.update_one(
+        {"id": playlist_id},
+        {"$set": {"media_ids": submitted, "updated_at": now_iso()}},
+    )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
 # Register router and CORS
 # ---------------------------------------------------------------------------
 app.include_router(api)

@@ -103,6 +103,16 @@ export default function Profile() {
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>🎵  Le mie playlist</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-playlists"
+          label="Apri playlist"
+          onPress={() => router.push("/playlists")}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>ℹ️  Il nostro progetto</Text>
         <View style={{ height: spacing.md }} />
         <OutlineButton

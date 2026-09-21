@@ -18,12 +18,14 @@ import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted, GoldButton } from "@/src/ui";
 import { AudioPlayer } from "@/src/AudioPlayer";
 import { useLang, catLabel } from "@/src/i18n";
+import AddToPlaylistModal from "@/src/AddToPlaylistModal";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [fav, setFav] = useState(false);
+  const [addPlOpen, setAddPlOpen] = useState(false);
   const { lang, t } = useLang();
 
   const { data, isLoading, error } = useQuery({
@@ -139,8 +141,25 @@ export default function MediaDetail() {
               style={{ marginTop: spacing.xl }}
             />
           )}
+
+          {data.kind === "meditation" ? (
+            <Pressable
+              testID="add-to-playlist"
+              onPress={() => setAddPlOpen(true)}
+              style={styles.addToPlBtn}
+            >
+              <Text style={styles.addToPlTxt}>➕  Aggiungi a playlist</Text>
+            </Pressable>
+          ) : null}
         </View>
       </ScrollView>
+
+      <AddToPlaylistModal
+        visible={addPlOpen}
+        onClose={() => setAddPlOpen(false)}
+        mediaId={id as string}
+        mediaTitle={data.title}
+      />
     </View>
   );
 }
@@ -172,4 +191,19 @@ const styles = StyleSheet.create({
   kind: { color: colors.brandPrimary, fontSize: 11, fontWeight: "700", letterSpacing: 1.5, marginBottom: spacing.md },
   title: { color: colors.onSurface, fontSize: 26, fontWeight: "700", lineHeight: 32 },
   body: { color: colors.onSurfaceSecondary, fontSize: 16, lineHeight: 25, marginTop: spacing.lg },
+  addToPlBtn: {
+    marginTop: spacing.md,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+    backgroundColor: "transparent",
+  },
+  addToPlTxt: {
+    color: colors.brandPrimary,
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
 });
