@@ -9,14 +9,22 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.integralwellness.pc8j5c"
+      "bundleIdentifier": "com.emergent.integralwellness.pc8j5c",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Scegli una foto per gli articoli",
+        "NSPhotoLibraryAddUsageDescription": "Salva immagini nella galleria"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.emergent.integralwellness.pc8j5c"
+      "package": "com.emergent.integralwellness.pc8j5c",
+      "permissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -42,6 +50,12 @@
       "expo-notifications",
       "expo-audio",
       "expo-sharing",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Scegli una foto per gli articoli"
+        }
+      ],
       "@react-native-vector-icons/fontawesome6"
     ],
     "experiments": {

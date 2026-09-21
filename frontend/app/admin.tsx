@@ -275,27 +275,38 @@ function ArticlesSection() {
   const pickAndUploadImage = async () => {
     setEMsg("");
     try {
-      const pick = await DocumentPicker.getDocumentAsync({
-        type: ["image/*", "image/jpeg", "image/png", "image/webp"],
-        copyToCacheDirectory: true,
-        multiple: false,
+      // Use expo-image-picker for images (more reliable URIs than DocumentPicker on Android)
+      const ImagePicker = await import("expo-image-picker");
+      // Request media library permission
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        setEMsg("Permesso galleria negato. Attivalo in Impostazioni → App → Expo Go → Permessi.");
+        return;
+      }
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? "Images",
+        allowsEditing: false,
+        quality: 0.85,
+        exif: false,
       });
       if (pick.canceled || !pick.assets?.[0]) return;
-      const asset = pick.assets[0];
+      const asset: any = pick.assets[0];
       setELoading(true);
-      setEMsg(`Caricamento: ${asset.name || "immagine"}…`);
+      const fileName = asset.fileName || `image-${Date.now()}.jpg`;
+      setEMsg(`Caricamento: ${fileName}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
       const form = new FormData();
       const inferredMime =
         asset.mimeType ||
-        (asset.name?.toLowerCase().endsWith(".png") ? "image/png"
-          : asset.name?.toLowerCase().endsWith(".webp") ? "image/webp"
+        (fileName.toLowerCase().endsWith(".png") ? "image/png"
+          : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
+          : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
           : "image/jpeg");
       if (Platform.OS === "web") {
         const blob = await (await fetch(asset.uri)).blob();
-        form.append("file", blob, asset.name || "image");
+        form.append("file", blob, fileName);
       } else {
-        form.append("file", { uri: asset.uri, name: asset.name || "image", type: inferredMime } as any);
+        form.append("file", { uri: asset.uri, name: fileName, type: inferredMime } as any);
       }
       const token =
         (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
@@ -309,7 +320,9 @@ function ArticlesSection() {
       if (!res.ok) throw new Error(await res.text());
       const j = await res.json();
       setEImage(j.url);
-      setEMsg(`✅ Immagine caricata`);
+      const sizeKB = Math.round((j.size || 0) / 1024);
+      const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
+      setEMsg(`✅ Immagine caricata (${sizeStr})`);
     } catch (e: any) {
       setEMsg(`Errore upload: ${e.message}`);
     } finally {
