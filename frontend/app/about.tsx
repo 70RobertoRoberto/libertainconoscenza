@@ -75,6 +75,17 @@ export default function About() {
         <Muted style={styles.tagline}>Sapienza per crescere</Muted>
       </View>
 
+      <View style={styles.bannerWrap}>
+        <Pressable testID="open-telegram-banner" onPress={openTelegram} style={styles.bannerPress}>
+          <Image
+            source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}/api/files/about/banner-telegram-49ac997f.jpg` }}
+            style={styles.bannerImg}
+            resizeMode="cover"
+            accessibilityLabel="Conoscenza Aperta - Canale Telegram"
+          />
+        </Pressable>
+      </View>
+
       <View style={{ paddingHorizontal: spacing.xl }}>
         <Text style={styles.body}>{ABOUT_INTRO}</Text>
 
@@ -146,6 +157,27 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   tagline: { fontStyle: "italic", marginTop: 4 },
+  bannerWrap: {
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  bannerPress: {
+    borderRadius: radius.lg,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    // Elegant subtle glow
+    shadowColor: colors.brandPrimary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bannerImg: {
+    width: "100%",
+    aspectRatio: 3 / 2,   // matches the source banner ratio (approx.)
+    backgroundColor: colors.surfaceSecondary,
+  },
   body: {
     color: colors.onSurfaceSecondary,
     fontSize: 15,
