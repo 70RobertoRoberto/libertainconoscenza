@@ -541,6 +541,20 @@ function MediaSection() {
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // Edit state for existing media
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [eTitle, setETitle] = useState("");
+  const [eDesc, setEDesc] = useState("");
+  const [eUrl, setEUrl] = useState("");
+  const [eThumb, setEThumb] = useState("");
+  const [eKind, setEKind] = useState<"meditation" | "video">("meditation");
+  const [eCat, setECat] = useState("Meditazione");
+  const [eMedCat, setEMedCat] = useState<string>("Armonizzazione e Radicamento");
+  const [eDuration, setEDuration] = useState("");
+  const [ePremium, setEPremium] = useState(false);
+  const [eLoading, setELoading] = useState(false);
+  const [eMsg, setEMsg] = useState("");
+
   const create = async () => {
     setLoading(true); setMsg("");
     try {
@@ -755,6 +769,123 @@ function MediaSection() {
     }
   };
 
+  const startEdit = (m: any) => {
+    setEditingId(m.id);
+    setETitle(m.title || "");
+    setEDesc(m.description || "");
+    setEUrl(m.media_url || "");
+    setEThumb(m.thumbnail_url || "");
+    setEKind(m.kind === "video" ? "video" : "meditation");
+    setECat(m.category || "Meditazione");
+    setEMedCat(m.meditation_category || "Armonizzazione e Radicamento");
+    setEDuration(m.duration_sec ? String(Math.round(m.duration_sec / 60)) : "");
+    setEPremium(!!m.is_premium);
+    setEMsg("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEMsg("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+    setELoading(true); setEMsg("");
+    try {
+      if (!eTitle || !eUrl) throw new Error("Titolo e URL richiesti");
+      const body: any = {
+        title: eTitle,
+        description: eDesc,
+        media_url: eUrl,
+        thumbnail_url: eThumb || null,
+        category: eCat,
+        meditation_category: eKind === "meditation" ? eMedCat : null,
+        duration_sec: eDuration ? parseInt(eDuration) * 60 : null,
+        is_premium: ePremium,
+      };
+      await api(`/admin/media/${editingId}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      qc.invalidateQueries({ queryKey: ["admin-media"] });
+      qc.invalidateQueries({ queryKey: ["meditation-categories"] });
+      qc.invalidateQueries({ queryKey: ["media", editingId] });
+      setEMsg("✅ Modifiche salvate");
+      setTimeout(() => { setEditingId(null); setEMsg(""); }, 900);
+    } catch (e: any) {
+      setEMsg(`Errore: ${e.message}`);
+    } finally {
+      setELoading(false);
+    }
+  };
+
+  const pickAndUploadEditThumb = async () => {
+    setEMsg("");
+    try {
+      const ImagePicker = await import("expo-image-picker");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        setEMsg("Permesso galleria negato.");
+        return;
+      }
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? "Images",
+        allowsEditing: false,
+        quality: 0.85,
+        exif: false,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset: any = pick.assets[0];
+      setELoading(true);
+      const fileName = asset.fileName || `thumb-${Date.now()}.jpg`;
+      setEMsg(`Caricamento: ${fileName}…`);
+      const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const inferredMime =
+        asset.mimeType ||
+        (fileName.toLowerCase().endsWith(".png") ? "image/png"
+          : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
+          : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
+          : "image/jpeg");
+      const token =
+        (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
+        (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      if (!token) throw new Error("Non autenticato");
+
+      let j: any;
+      if (Platform.OS === "web") {
+        const form = new FormData();
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, fileName);
+        const res = await fetch(`${backend}/api/admin/upload`, {
+          method: "POST",
+          body: form as any,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        j = await res.json();
+      } else {
+        const result = await FileSystem.uploadAsync(`${backend}/api/admin/upload`, asset.uri, {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: inferredMime,
+          parameters: {},
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!result || result.status < 200 || result.status >= 300) {
+          throw new Error(result?.body || `Errore ${result?.status}`);
+        }
+        j = JSON.parse(result.body || "{}");
+      }
+      setEThumb(j.url);
+      setEMsg("✅ Anteprima caricata");
+    } catch (e: any) {
+      setEMsg(`Errore anteprima: ${e.message}`);
+    } finally {
+      setELoading(false);
+    }
+  };
+
   const remove = async (id: string) => {
     await api(`/admin/media/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["admin-media"] });
@@ -846,17 +977,73 @@ function MediaSection() {
 
       <Text style={styles.section}>Media caricati</Text>
       {(data?.items || []).map((m: any) => (
-        <View key={m.id} style={styles.itemRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.itemTitle} numberOfLines={1}>{m.title}</Text>
-            <Muted style={{ fontSize: 11 }}>
-              {m.kind}{m.meditation_category ? ` · ${m.meditation_category}` : ` · ${m.category}`} · {m.views} viste{m.is_premium ? " · PREMIUM" : ""}
-            </Muted>
+        editingId === m.id ? (
+          <View key={m.id} style={[styles.itemRow, { flexDirection: "column", alignItems: "stretch", gap: spacing.sm, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: spacing.md }]}>
+            <Text style={{ color: colors.brandPrimary, fontWeight: "700", marginBottom: spacing.xs }}>Modifica media</Text>
+            <TextInput value={eTitle} onChangeText={setETitle} placeholder="Titolo" placeholderTextColor={colors.muted} style={styles.input} />
+            <TextInput value={eUrl} onChangeText={setEUrl} placeholder="URL YouTube / mp3 / mp4" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="none" />
+            <TextInput value={eThumb} onChangeText={setEThumb} placeholder="URL immagine anteprima" placeholderTextColor={colors.muted} style={styles.input} autoCapitalize="none" />
+            <GoldButton label="🖼️ Carica nuova anteprima dalla galleria" onPress={pickAndUploadEditThumb} loading={eLoading} />
+            {eThumb ? (
+              <View style={{ alignItems: "center" }}>
+                <Image source={{ uri: eThumb }} style={{ width: 140, height: 140, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }} resizeMode="cover" />
+                <Pressable onPress={() => setEThumb("")} style={{ marginTop: spacing.xs }}>
+                  <Text style={{ color: colors.brandPrimary, fontSize: 12 }}>Rimuovi anteprima</Text>
+                </Pressable>
+              </View>
+            ) : null}
+            <TextInput value={eDesc} onChangeText={setEDesc} placeholder="Descrizione" placeholderTextColor={colors.muted} multiline style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]} />
+            <TextInput value={eDuration} onChangeText={setEDuration} placeholder="Durata in minuti" placeholderTextColor={colors.muted} keyboardType="numeric" style={styles.input} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              {CATEGORIES.map((c) => (
+                <Pressable key={c} onPress={() => setECat(c)} style={[styles.smallChip, eCat === c && styles.smallChipActive]}>
+                  <Text style={eCat === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            {eKind === "meditation" ? (
+              <>
+                <Muted style={{ fontSize: 12 }}>Categoria meditazione</Muted>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                  {MEDITATION_CATS.map((c) => (
+                    <Pressable key={c} onPress={() => setEMedCat(c)} style={[styles.smallChip, eMedCat === c && styles.smallChipActive]}>
+                      <Text style={eMedCat === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
+            <Pressable onPress={() => setEPremium(!ePremium)} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={[styles.checkbox, ePremium && { backgroundColor: colors.brandPrimary }]} />
+              <Text style={{ color: colors.onSurface }}>Contenuto Premium</Text>
+            </Pressable>
+            {eMsg ? <Text style={{ color: colors.brandPrimary, fontSize: 13 }}>{eMsg}</Text> : null}
+            <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs }}>
+              <GoldButton label="Salva modifiche" onPress={saveEdit} loading={eLoading} style={{ flex: 1 }} />
+              <Pressable onPress={cancelEdit} style={{ paddingHorizontal: spacing.lg, justifyContent: "center", borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ color: colors.muted }}>Annulla</Text>
+              </Pressable>
+            </View>
           </View>
-          <Pressable onPress={() => remove(m.id)}>
-            <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
-          </Pressable>
-        </View>
+        ) : (
+          <View key={m.id} style={styles.itemRow}>
+            {m.thumbnail_url ? (
+              <Image source={{ uri: m.thumbnail_url }} style={{ width: 44, height: 44, borderRadius: 6, marginRight: spacing.sm }} />
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.itemTitle} numberOfLines={1}>{m.title}</Text>
+              <Muted style={{ fontSize: 11 }}>
+                {m.kind}{m.meditation_category ? ` · ${m.meditation_category}` : ` · ${m.category}`} · {m.views} viste{m.is_premium ? " · PREMIUM" : ""}
+              </Muted>
+            </View>
+            <Pressable onPress={() => startEdit(m)} style={{ marginRight: spacing.md }}>
+              <Text style={{ color: colors.brandPrimary, fontWeight: "700" }}>Modifica</Text>
+            </Pressable>
+            <Pressable onPress={() => remove(m.id)}>
+              <Text style={{ color: colors.error, fontWeight: "700" }}>Elimina</Text>
+            </Pressable>
+          </View>
+        )
       ))}
     </ScrollView>
   );

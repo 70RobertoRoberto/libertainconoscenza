@@ -1331,6 +1331,37 @@ async def delete_media(media_id: str):
     return {"deleted": r.deleted_count}
 
 
+class MediaUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    meditation_category: Optional[str] = None
+    media_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    duration_sec: Optional[int] = None
+    is_premium: Optional[bool] = None
+
+
+@api.put("/admin/media/{media_id}", dependencies=[Depends(require_admin)])
+async def update_media(media_id: str, inp: MediaUpdate):
+    existing = await db.media.find_one({"id": media_id})
+    if not existing:
+        raise HTTPException(404, "Media non trovato")
+    update: dict = {}
+    for k, v in inp.dict(exclude_unset=True).items():
+        if v is not None or k == "thumbnail_url":  # allow clearing thumbnail
+            update[k] = v
+    if "category" in update and update["category"] not in CATEGORIES:
+        raise HTTPException(400, "Categoria non valida")
+    if "meditation_category" in update and update["meditation_category"] and update["meditation_category"] not in MEDITATION_CATEGORIES:
+        raise HTTPException(400, "Categoria meditazione non valida")
+    if update:
+        update["updated_at"] = now_iso()
+        await db.media.update_one({"id": media_id}, {"$set": update})
+    m = await db.media.find_one({"id": media_id})
+    return _serialize_media(m)
+
+
 # ---------------------------------------------------------------------------
 # Messages (admin -> users)
 # ---------------------------------------------------------------------------
