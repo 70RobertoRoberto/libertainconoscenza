@@ -1,0 +1,35 @@
+{
+  "summary": "Verified iteration 15 i18n content translation feature (title_en/summary_en for articles, title_en/description_en for media). Backend: 10/10 pytest tests pass covering /articles, /articles/{id}, /media, /media/{id}, /search, /favorites, /playlists/{id} with lang=en/it/(none), plus has_translation_en boolean and IT fallback when translation missing. Frontend (mobile viewport 390x844, Expo web preview): logged in as admin, captured 5 Italian article titles in Library, switched to English via Profile → prof-lang-en, returned to Library and confirmed ALL 5 titles now render in English (e.g., \"L'illusione della separazione...\" → \"The Illusion of Separation: Beyond Dualism in the Human Being\"). Opened an article detail while in EN — English title/summary rendered. Switched back to Italian and Library titles fully reverted to original IT — no stale cache. Language plumbing (lang query param, React Query invalidation via queryKey including lang) works end-to-end. Core user bug is FIXED.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration15_i18n_content.py",
+    "/app/test_reports/pytest/iteration_15.xml"
+  ],
+  "action_items": [
+    "OPTIONAL (out of scope for this bug): media documents currently have no title_en/description_en populated — the pipeline for translating media items (if desired) is not implemented; backend correctly falls back to IT. If English users should see translated meditation/video titles too, run a translation pass on the media collection.",
+    "NOTE (unchanged since prior iterations, not part of this bug): 'shadow*' and 'textShadow*' style props deprecation warnings emitted by RN Web — cosmetic only."
+  ],
+  "critical_code_review_comments": [
+    "server.py _serialize_article/_serialize_media correctly gate the EN swap behind existence of the translated field, providing safe IT fallback.",
+    "Frontend queryKeys include `lang`, so React Query cleanly refetches on toggle — no manual invalidation needed.",
+    "Search endpoint queries both IT and EN fields via $or, so users searching in either language get hits regardless of active locale."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration15_i18n_content.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (core Library EN swap + article detail EN + revert to IT all verified)"},
+  "seed_data_creation": "No permanent seed data added. Tests create then delete ephemeral TEST_ articles/media/playlists.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 15 introduces lang query param on content endpoints. All 108 seeded articles have title_en/summary_en populated (has_translation_en=true). Media items have no EN fields yet — /media?lang=en returns IT content with has_translation_en=false (verified fallback). Admin creds: +393331234567 / Admin2026!. Meditation category names must match constants in server.py line 71 (e.g. 'Concentrazione e Attenzione', not just 'Concentrazione'). Favorites toggling uses POST /favorites/toggle (not POST/DELETE /favorites).",
+  "rca_of_issue": "Original bug: article/media titles remained Italian after locale switch. RCA: frontend was fetching /articles without a lang parameter and backend had no translated fields. Fix (already applied by E1): (a) added title_en/summary_en/title_en/description_en to article & media documents, (b) accept optional lang query param on all content read endpoints and swap primary title/summary/description when lang=='en' and translation exists, (c) frontend queries append ?lang=${lang} and queryKey includes lang so React Query refetches on toggle. Verified end-to-end that Library titles switch cleanly IT↔EN."
+}

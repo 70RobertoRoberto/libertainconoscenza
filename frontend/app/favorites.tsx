@@ -7,14 +7,16 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
+import { useLang } from "@/src/i18n";
 
 export default function Favorites() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { lang } = useLang();
 
   const { data, refetch } = useQuery({
-    queryKey: ["favorites"],
-    queryFn: () => api<{ articles: any[]; media: any[] }>("/favorites"),
+    queryKey: ["favorites", lang],
+    queryFn: () => api<{ articles: any[]; media: any[] }>(`/favorites?lang=${lang}`),
   });
 
   const articles = data?.articles || [];

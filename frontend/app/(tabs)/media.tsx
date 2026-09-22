@@ -27,7 +27,7 @@ type Mode = "meditation" | "video";
 export default function Media() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [mode, setMode] = useState<Mode>("meditation");
 
   // Category counts (meditations per category)
@@ -47,8 +47,8 @@ export default function Media() {
 
   // Video list (only fetched when video mode is active)
   const { data: videoData, refetch: refetchVideos, isFetching: fetchingVideos } = useQuery({
-    queryKey: ["videos"],
-    queryFn: () => api<{ items: any[] }>("/media?kind=video"),
+    queryKey: ["videos", lang],
+    queryFn: () => api<{ items: any[] }>(`/media?kind=video&lang=${lang}`),
     enabled: mode === "video",
   });
 

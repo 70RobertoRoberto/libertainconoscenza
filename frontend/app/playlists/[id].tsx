@@ -42,13 +42,13 @@ export default function PlaylistDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const qc = useQueryClient();
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const [renaming, setRenaming] = useState(false);
   const [nameEdit, setNameEdit] = useState("");
 
   const { data, refetch, isFetching, isLoading } = useQuery({
-    queryKey: ["playlist", id],
-    queryFn: () => api<PlaylistDetail>(`/playlists/${id}`),
+    queryKey: ["playlist", id, lang],
+    queryFn: () => api<PlaylistDetail>(`/playlists/${id}?lang=${lang}`),
     enabled: !!id,
   });
 

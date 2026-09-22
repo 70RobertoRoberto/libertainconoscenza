@@ -15,7 +15,7 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
 - **Paywall**: 3 plans (12m preselected), **coupon input** with live discount preview.
 - **Messages inbox**: broadcast + personal.
 - **Profile**: badges, language toggle, favorites, **referral card** (gold code + count + Share button), upgrade CTA, admin entry, logout.
-- **Admin panel**: Statistiche, Articoli (manual + AI 60-line summarize), Video/Med. (**+ file upload** via Emergent Object Storage), YouTube import (RSS/Data API), Pubblicità (5-sec banner every 10 min), Sconti (coupons), Messaggi, Utenti, Ordini.
+- **Admin panel**: Statistiche, Articoli (manual + AI 60-line summarize), Video/Med. (**+ file upload** via Emergent Object Storage, streaming upload via expo-file-system con progress bar), YouTube import (RSS/Data API), Pubblicità (5-sec banner every 10 min), Sconti (coupons), Messaggi, Utenti, Ordini.
 - **Push notifications**: SuprSend relay via `/api/register-push`; new article/media/message triggers backend `send_push_bg`. Frontend has module-scope handlers, Android channel, tap listener + cold-start check.
 - **Referral Program**: every user gets a unique `referral_code` (admin's = `MAESTRO-2026`). Registration accepts optional `referral_code`; the referrer's `referral_count` increments. Profile shows the code and invited count + share.
 

@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
@@ -538,6 +539,7 @@ function MediaSection() {
   const [premium, setPremium] = useState(false);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const create = async () => {
     setLoading(true); setMsg("");
@@ -564,6 +566,7 @@ function MediaSection() {
 
   const pickAndUpload = async () => {
     setMsg("");
+    setProgress(0);
     try {
       // Broad audio filter on Android so recorder files (m4a, amr, 3gp, opus) are visible.
       const pick = await DocumentPicker.getDocumentAsync({
@@ -575,10 +578,14 @@ function MediaSection() {
       });
       if (pick.canceled || !pick.assets?.[0]) return;
       const asset = pick.assets[0];
+      // Warn user if file exceeds 200MB (backend hard cap 300MB, but Expo Go often crashes above ~250MB).
+      const sizeMB = asset.size ? asset.size / (1024 * 1024) : 0;
+      if (sizeMB > 300) {
+        throw new Error(`File troppo grande (${sizeMB.toFixed(0)} MB). Massimo 300 MB.`);
+      }
       setLoading(true);
-      setMsg(`Caricamento in corso: ${asset.name || "file"}…`);
+      setMsg(`Caricamento in corso: ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-      const form = new FormData();
       const inferredMime =
         asset.mimeType ||
         (kind === "meditation"
@@ -591,23 +598,58 @@ function MediaSection() {
             : asset.name?.toLowerCase().endsWith(".flac") ? "audio/flac"
             : "audio/mpeg")
           : "video/mp4");
-      if (Platform.OS === "web") {
-        const blob = await (await fetch(asset.uri)).blob();
-        form.append("file", blob, asset.name || "file");
-      } else {
-        form.append("file", { uri: asset.uri, name: asset.name || "file", type: inferredMime } as any);
-      }
       const token =
         (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
         (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
       if (!token) throw new Error("Non autenticato");
-      const res = await fetch(`${backend}/api/admin/upload`, {
-        method: "POST",
-        body: form as any,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const j = await res.json();
+
+      let j: any;
+      if (Platform.OS === "web") {
+        // Web path: fetch blob and multipart POST.
+        const form = new FormData();
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, asset.name || "file");
+        const res = await fetch(`${backend}/api/admin/upload`, {
+          method: "POST",
+          body: form as any,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        j = await res.json();
+      } else {
+        // Native path: use FileSystem.uploadAsync — streams file natively (no JS memory blowup on large audio/video),
+        // and reports byte-level progress. Avoids Expo Go being killed by Android OOM.
+        const task = FileSystem.createUploadTask(
+          `${backend}/api/admin/upload`,
+          asset.uri,
+          {
+            httpMethod: "POST",
+            uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+            fieldName: "file",
+            mimeType: inferredMime,
+            parameters: {},
+            headers: { Authorization: `Bearer ${token}` },
+          },
+          (p) => {
+            if (p.totalBytesExpectedToSend > 0) {
+              const pct = Math.min(100, Math.round((p.totalBytesSent / p.totalBytesExpectedToSend) * 100));
+              setProgress(pct);
+              setMsg(`Caricamento ${pct}% — ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}`);
+            }
+          }
+        );
+        const result = await task.uploadAsync();
+        if (!result) throw new Error("Upload interrotto");
+        if (result.status < 200 || result.status >= 300) {
+          throw new Error(result.body || `Errore ${result.status}`);
+        }
+        try {
+          j = JSON.parse(result.body || "{}");
+        } catch {
+          throw new Error("Risposta server non valida");
+        }
+      }
+
       setUrl(j.url);
       // Auto-fill title from the filename if empty (strip extension).
       if (!title && asset.name) {
@@ -617,8 +659,10 @@ function MediaSection() {
       const sizeKB = Math.round(j.size / 1024);
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
       setMsg(`✅ File caricato: ${asset.name} (${sizeStr}). Ora compila i campi e tocca "Pubblica".`);
+      setProgress(100);
     } catch (e: any) {
       setMsg(`Errore upload: ${e.message}`);
+      setProgress(0);
     } finally {
       setLoading(false);
     }
@@ -649,6 +693,11 @@ function MediaSection() {
           style={{ marginTop: spacing.md }}
           loading={loading}
         />
+        {loading && progress > 0 && progress < 100 ? (
+          <View style={{ marginTop: spacing.sm, height: 8, backgroundColor: colors.surfaceSecondary, borderRadius: 4, overflow: "hidden" }}>
+            <View style={{ width: `${progress}%`, height: "100%", backgroundColor: colors.brandPrimary }} />
+          </View>
+        ) : null}
         {kind === "meditation" ? (
           <Muted style={{ marginTop: spacing.sm, fontSize: 12 }}>
             Supporta MP3, M4A, WAV, AMR, 3GP, OGG, OPUS, FLAC. Anche le registrazioni fatte con il registratore del telefono (max 300 MB).

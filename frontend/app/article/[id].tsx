@@ -30,8 +30,8 @@ export default function ArticleDetail() {
   const { lang, t } = useLang();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["article", id],
-    queryFn: () => api<any>(`/articles/${id}`),
+    queryKey: ["article", id, lang],
+    queryFn: () => api<any>(`/articles/${id}?lang=${lang}`),
     enabled: !!id,
   });
 

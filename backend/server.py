@@ -616,20 +616,23 @@ async def get_plans():
 # Search
 # ---------------------------------------------------------------------------
 @api.get("/search")
-async def search(q: str = Query(..., min_length=2), user: dict = Depends(current_user)):
+async def search(q: str = Query(..., min_length=2), lang: Optional[str] = None, user: dict = Depends(current_user)):
     rgx = {"$regex": re.escape(q), "$options": "i"}
+    # match against both languages so search works whichever locale the user is in
+    text_or_article = [
+        {"title": rgx}, {"summary": rgx}, {"category": rgx},
+        {"title_en": rgx}, {"summary_en": rgx},
+    ]
+    text_or_media = [
+        {"title": rgx}, {"description": rgx}, {"category": rgx},
+        {"title_en": rgx}, {"description_en": rgx},
+    ]
     articles = []
-    async for a in db.articles.find(
-        {"$or": [{"title": rgx}, {"summary": rgx}, {"category": rgx}]},
-        {"_id": 0},
-    ).limit(30):
-        articles.append(_serialize_article(a))
+    async for a in db.articles.find({"$or": text_or_article}, {"_id": 0}).limit(30):
+        articles.append(_serialize_article(a, lang))
     media = []
-    async for m in db.media.find(
-        {"$or": [{"title": rgx}, {"description": rgx}, {"category": rgx}]},
-        {"_id": 0},
-    ).limit(30):
-        media.append(_serialize_media(m))
+    async for m in db.media.find({"$or": text_or_media}, {"_id": 0}).limit(30):
+        media.append(_serialize_media(m, lang))
     return {"articles": articles, "media": media}
 
 
@@ -1033,17 +1036,30 @@ async def admin_reset_user_password(inp: AdminResetPasswordIn, admin: dict = Dep
 # ---------------------------------------------------------------------------
 # Articles
 # ---------------------------------------------------------------------------
-def _serialize_article(a: dict) -> dict:
+def _serialize_article(a: dict, lang: Optional[str] = None) -> dict:
+    """Serialize an article. When lang == "en" and English translations exist,
+    swap them into the primary title/summary fields so the frontend transparently
+    receives translated content."""
+    title = a["title"]
+    summary = a["summary"]
+    if lang == "en":
+        te = a.get("title_en")
+        se = a.get("summary_en")
+        if te:
+            title = te
+        if se:
+            summary = se
     return {
         "id": a["id"],
-        "title": a["title"],
-        "summary": a["summary"],
+        "title": title,
+        "summary": summary,
         "category": a["category"],
         "source_url": a.get("source_url"),
         "image_url": a.get("image_url"),
         "is_premium": a.get("is_premium", False),
         "views": a.get("views", 0),
         "created_at": a.get("created_at", ""),
+        "has_translation_en": bool(a.get("title_en") and a.get("summary_en")),
     }
 
 
@@ -1051,19 +1067,20 @@ def _serialize_article(a: dict) -> dict:
 async def list_articles(
     category: Optional[str] = None,
     limit: int = 50,
+    lang: Optional[str] = None,
     user: dict = Depends(current_user),
 ):
     q = {}
     if category:
         q["category"] = category
     cursor = db.articles.find(q, {"_id": 0}).sort("created_at", -1).limit(limit)
-    items = [_serialize_article(a) async for a in cursor]
+    items = [_serialize_article(a, lang) async for a in cursor]
     # Hide premium body for free users? We still show, but frontend gates
     return {"items": items}
 
 
 @api.get("/articles/{article_id}")
-async def get_article(article_id: str, user: dict = Depends(current_user)):
+async def get_article(article_id: str, lang: Optional[str] = None, user: dict = Depends(current_user)):
     a = await db.articles.find_one({"id": article_id}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Non trovato")
@@ -1078,7 +1095,7 @@ async def get_article(article_id: str, user: dict = Depends(current_user)):
         "ts": now_iso(),
     })
     a["views"] = a.get("views", 0) + 1
-    return _serialize_article(a)
+    return _serialize_article(a, lang)
 
 
 @api.post("/admin/articles", dependencies=[Depends(require_admin)])
@@ -1185,11 +1202,18 @@ async def summarize_and_create(inp: SummarizeIn):
 # ---------------------------------------------------------------------------
 # Media (videos + meditations)
 # ---------------------------------------------------------------------------
-def _serialize_media(m: dict) -> dict:
+def _serialize_media(m: dict, lang: Optional[str] = None) -> dict:
+    title = m["title"]
+    description = m.get("description", "")
+    if lang == "en":
+        if m.get("title_en"):
+            title = m["title_en"]
+        if m.get("description_en"):
+            description = m["description_en"]
     return {
         "id": m["id"],
-        "title": m["title"],
-        "description": m.get("description", ""),
+        "title": title,
+        "description": description,
         "category": m["category"],
         "kind": m["kind"],
         "meditation_category": m.get("meditation_category"),
@@ -1199,6 +1223,7 @@ def _serialize_media(m: dict) -> dict:
         "is_premium": m.get("is_premium", False),
         "views": m.get("views", 0),
         "created_at": m.get("created_at", ""),
+        "has_translation_en": bool(m.get("title_en") or m.get("description_en")),
     }
 
 
@@ -1207,6 +1232,7 @@ async def list_media(
     kind: Optional[str] = None,
     category: Optional[str] = None,
     meditation_category: Optional[str] = None,
+    lang: Optional[str] = None,
     user: dict = Depends(current_user),
 ):
     q: dict = {}
@@ -1217,7 +1243,7 @@ async def list_media(
     if meditation_category:
         q["meditation_category"] = meditation_category
     cursor = db.media.find(q, {"_id": 0}).sort("created_at", -1)
-    items = [_serialize_media(m) async for m in cursor]
+    items = [_serialize_media(m, lang) async for m in cursor]
     return {"items": items}
 
 
@@ -1255,7 +1281,7 @@ def _slug_to_category(slug: str) -> Optional[str]:
 
 
 @api.get("/media/{media_id}")
-async def get_media(media_id: str, user: dict = Depends(current_user)):
+async def get_media(media_id: str, lang: Optional[str] = None, user: dict = Depends(current_user)):
     m = await db.media.find_one({"id": media_id}, {"_id": 0})
     if not m:
         raise HTTPException(404, "Non trovato")
@@ -1272,7 +1298,7 @@ async def get_media(media_id: str, user: dict = Depends(current_user)):
         "ts": now_iso(),
     })
     m["views"] = m.get("views", 0) + 1
-    return _serialize_media(m)
+    return _serialize_media(m, lang)
 
 
 @api.post("/admin/media", dependencies=[Depends(require_admin)])
@@ -1534,18 +1560,18 @@ async def toggle_favorite(inp: FavoriteIn, user: dict = Depends(current_user)):
 
 
 @api.get("/favorites")
-async def list_favorites(user: dict = Depends(current_user)):
+async def list_favorites(lang: Optional[str] = None, user: dict = Depends(current_user)):
     cursor = db.favorites.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1)
     articles, media = [], []
     async for f in cursor:
         if f["content_type"] == "article":
             a = await db.articles.find_one({"id": f["content_id"]}, {"_id": 0})
             if a:
-                articles.append(_serialize_article(a))
+                articles.append(_serialize_article(a, lang))
         else:
             m = await db.media.find_one({"id": f["content_id"]}, {"_id": 0})
             if m:
-                media.append(_serialize_media(m))
+                media.append(_serialize_media(m, lang))
     ids = set()
     async for f in db.favorites.find({"user_id": user["id"]}, {"_id": 0, "content_id": 1}):
         ids.add(f["content_id"])
@@ -2171,7 +2197,7 @@ async def create_playlist(inp: PlaylistCreate, user: dict = Depends(current_user
 
 
 @api.get("/playlists/{playlist_id}")
-async def get_playlist(playlist_id: str, user: dict = Depends(current_user)):
+async def get_playlist(playlist_id: str, lang: Optional[str] = None, user: dict = Depends(current_user)):
     p = await db.playlists.find_one({"id": playlist_id, "user_id": user["id"]}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Playlist non trovata")
@@ -2180,7 +2206,23 @@ async def get_playlist(playlist_id: str, user: dict = Depends(current_user)):
     if ids:
         async for m in db.media.find({"id": {"$in": ids}}, {"_id": 0}):
             media[m["id"]] = m
-    return _serialize_playlist(p, media)
+    # Translate hydrated items
+    hydrated = {mid: m for mid, m in media.items()}
+    # serialize using lang
+    ordered_items = []
+    for mid in ids:
+        m = hydrated.get(mid)
+        if m:
+            ordered_items.append(_serialize_media(m, lang))
+    return {
+        "id": p["id"],
+        "name": p["name"],
+        "media_ids": ids,
+        "items": ordered_items,
+        "count": len(ids),
+        "created_at": p.get("created_at", ""),
+        "updated_at": p.get("updated_at", ""),
+    }
 
 
 @api.patch("/playlists/{playlist_id}")

@@ -41,8 +41,11 @@ export default function Library() {
   const { t, lang } = useLang();
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ["library", cat],
-    queryFn: () => api<{ items: any[] }>(`/articles${cat === "Tutte" ? "" : `?category=${encodeURIComponent(cat)}`}`),
+    queryKey: ["library", cat, lang],
+    queryFn: () => {
+      const catPart = cat === "Tutte" ? "" : `category=${encodeURIComponent(cat)}&`;
+      return api<{ items: any[] }>(`/articles?${catPart}lang=${lang}`);
+    },
   });
 
   return (

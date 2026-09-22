@@ -66,13 +66,13 @@ export default function Home() {
   };
 
   const { data, refetch, isFetching } = useQuery({
-    queryKey: ["articles-home"],
-    queryFn: () => api<{ items: Article[] }>("/articles?limit=20"),
+    queryKey: ["home-articles", lang],
+    queryFn: () => api<{ items: Article[] }>(`/articles?limit=20&lang=${lang}`),
   });
 
   const { data: searchRes } = useQuery({
-    queryKey: ["search", q],
-    queryFn: () => api<any>(`/search?q=${encodeURIComponent(q)}`),
+    queryKey: ["search", q, lang],
+    queryFn: () => api<any>(`/search?q=${encodeURIComponent(q)}&lang=${lang}`),
     enabled: q.trim().length >= 2,
   });
 

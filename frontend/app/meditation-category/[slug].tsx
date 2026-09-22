@@ -22,15 +22,15 @@ export default function MeditationCategoryScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const category = React.useMemo(() => findCategoryBySlug(slug || ""), [slug]);
 
   const { data, refetch, isFetching, isLoading } = useQuery({
-    queryKey: ["meditation-cat", category?.name],
+    queryKey: ["meditation-cat", category?.name, lang],
     queryFn: () =>
       api<{ items: any[] }>(
-        `/media?kind=meditation&meditation_category=${encodeURIComponent(category?.name || "")}`
+        `/media?kind=meditation&meditation_category=${encodeURIComponent(category?.name || "")}&lang=${lang}`
       ),
     enabled: !!category,
   });

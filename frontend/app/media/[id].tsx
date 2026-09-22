@@ -29,8 +29,8 @@ export default function MediaDetail() {
   const { lang, t } = useLang();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ["media", id],
-    queryFn: () => api<any>(`/media/${id}`),
+    queryKey: ["media", id, lang],
+    queryFn: () => api<any>(`/media/${id}?lang=${lang}`),
     enabled: !!id,
   });
 
