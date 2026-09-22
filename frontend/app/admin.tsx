@@ -567,24 +567,27 @@ function MediaSection() {
   const pickAndUpload = async () => {
     setMsg("");
     setProgress(0);
+    console.log("[UPLOAD v2] pickAndUpload started, kind=", kind);
     try {
-      // Broad audio filter on Android so recorder files (m4a, amr, 3gp, opus) are visible.
+      // NOTE: copyToCacheDirectory=false to avoid an OS-level file copy that can trigger OOM on OPPO/low-RAM devices.
+      // FileSystem.uploadAsync (native) can consume content:// URIs directly on Android.
       const pick = await DocumentPicker.getDocumentAsync({
         type: kind === "meditation"
           ? ["audio/*", "audio/mpeg", "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav", "audio/aac", "audio/amr", "audio/3gpp", "audio/ogg", "audio/opus", "audio/flac", "application/octet-stream"]
           : "video/*",
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: false,
         multiple: false,
       });
+      console.log("[UPLOAD v2] picker result canceled=", pick.canceled, "assets=", pick.assets?.length);
       if (pick.canceled || !pick.assets?.[0]) return;
       const asset = pick.assets[0];
-      // Warn user if file exceeds 200MB (backend hard cap 300MB, but Expo Go often crashes above ~250MB).
+      console.log("[UPLOAD v2] asset uri=", asset.uri, "name=", asset.name, "mime=", asset.mimeType, "size=", asset.size);
       const sizeMB = asset.size ? asset.size / (1024 * 1024) : 0;
       if (sizeMB > 300) {
         throw new Error(`File troppo grande (${sizeMB.toFixed(0)} MB). Massimo 300 MB.`);
       }
       setLoading(true);
-      setMsg(`Caricamento in corso: ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}…`);
+      setMsg(`⏳ v2 — Caricamento: ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
       const inferredMime =
         asset.mimeType ||
@@ -602,10 +605,10 @@ function MediaSection() {
         (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
         (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
       if (!token) throw new Error("Non autenticato");
+      console.log("[UPLOAD v2] token ok, backend=", backend, "mime=", inferredMime);
 
       let j: any;
       if (Platform.OS === "web") {
-        // Web path: fetch blob and multipart POST.
         const form = new FormData();
         const blob = await (await fetch(asset.uri)).blob();
         form.append("file", blob, asset.name || "file");
@@ -617,11 +620,26 @@ function MediaSection() {
         if (!res.ok) throw new Error(await res.text());
         j = await res.json();
       } else {
-        // Native path: use FileSystem.uploadAsync — streams file natively (no JS memory blowup on large audio/video),
-        // and reports byte-level progress. Avoids Expo Go being killed by Android OOM.
+        // Native: FileSystem.uploadAsync streams the file from disk without holding it in JS memory.
+        // Use createUploadTask to get progress updates.
+        let sourceUri = asset.uri;
+        // If URI is content:// on Android, copy to app cache first so FileSystem can access it reliably.
+        // We do this via FileSystem.copyAsync which uses native streaming (no JS mem blowup).
+        if (Platform.OS === "android" && sourceUri.startsWith("content://")) {
+          try {
+            const dest = `${FileSystem.cacheDirectory}${Date.now()}_${(asset.name || "file").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+            console.log("[UPLOAD v2] copying content:// -> ", dest);
+            await FileSystem.copyAsync({ from: sourceUri, to: dest });
+            sourceUri = dest;
+            console.log("[UPLOAD v2] copy done, new uri=", sourceUri);
+          } catch (copyErr: any) {
+            console.log("[UPLOAD v2] copy failed, using original uri. err=", copyErr?.message);
+          }
+        }
+        console.log("[UPLOAD v2] starting uploadAsync from", sourceUri);
         const task = FileSystem.createUploadTask(
           `${backend}/api/admin/upload`,
-          asset.uri,
+          sourceUri,
           {
             httpMethod: "POST",
             uploadType: FileSystem.FileSystemUploadType.MULTIPART,
@@ -634,11 +652,12 @@ function MediaSection() {
             if (p.totalBytesExpectedToSend > 0) {
               const pct = Math.min(100, Math.round((p.totalBytesSent / p.totalBytesExpectedToSend) * 100));
               setProgress(pct);
-              setMsg(`Caricamento ${pct}% — ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}`);
+              setMsg(`⏳ v2 Caricamento ${pct}% — ${asset.name || "file"}${sizeMB ? ` (${sizeMB.toFixed(1)} MB)` : ""}`);
             }
           }
         );
         const result = await task.uploadAsync();
+        console.log("[UPLOAD v2] uploadAsync result status=", result?.status);
         if (!result) throw new Error("Upload interrotto");
         if (result.status < 200 || result.status >= 300) {
           throw new Error(result.body || `Errore ${result.status}`);
@@ -651,17 +670,17 @@ function MediaSection() {
       }
 
       setUrl(j.url);
-      // Auto-fill title from the filename if empty (strip extension).
       if (!title && asset.name) {
         const nice = asset.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
         if (nice) setTitle(nice.charAt(0).toUpperCase() + nice.slice(1));
       }
-      const sizeKB = Math.round(j.size / 1024);
+      const sizeKB = Math.round((j.size || 0) / 1024);
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
-      setMsg(`✅ File caricato: ${asset.name} (${sizeStr}). Ora compila i campi e tocca "Pubblica".`);
+      setMsg(`✅ v2 File caricato: ${asset.name} (${sizeStr}). Ora compila i campi e tocca "Pubblica".`);
       setProgress(100);
     } catch (e: any) {
-      setMsg(`Errore upload: ${e.message}`);
+      console.log("[UPLOAD v2] ERROR", e?.message, e?.stack);
+      setMsg(`Errore upload (v2): ${e.message}`);
       setProgress(0);
     } finally {
       setLoading(false);
@@ -688,7 +707,7 @@ function MediaSection() {
         <TextInput testID="media-url" value={url} onChangeText={setUrl} placeholder="URL YouTube / mp3 / mp4 — oppure carica un file qui sotto ↓" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
         <GoldButton
           testID="upload-file"
-          label={kind === "meditation" ? "🎙️  Carica registrazione dal telefono" : "📹  Carica video dal telefono"}
+          label={kind === "meditation" ? "🎙️ v2 · Carica registrazione dal telefono" : "📹 v2 · Carica video dal telefono"}
           onPress={pickAndUpload}
           style={{ marginTop: spacing.md }}
           loading={loading}
