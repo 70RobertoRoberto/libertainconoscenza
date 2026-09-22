@@ -38,6 +38,9 @@ export default function Media() {
         "/meditation-categories"
       ),
     enabled: mode === "meditation",
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
   const counts: Record<string, number> = React.useMemo(() => {
     const m: Record<string, number> = {};
@@ -50,6 +53,9 @@ export default function Media() {
     queryKey: ["videos", lang],
     queryFn: () => api<{ items: any[] }>(`/media?kind=video&lang=${lang}`),
     enabled: mode === "video",
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   return (

@@ -573,6 +573,9 @@ function MediaSection() {
       setTitle(""); setDesc(""); setUrl(""); setThumb(""); setDuration("");
       qc.invalidateQueries({ queryKey: ["admin-media"] });
       qc.invalidateQueries({ queryKey: ["meditation-categories"] });
+      qc.invalidateQueries({ queryKey: ["meditation-cat"] });
+      qc.invalidateQueries({ queryKey: ["videos"] });
+      qc.invalidateQueries({ queryKey: ["media"] });
       setMsg("Contenuto caricato");
     } catch (e: any) { setMsg(e.message); }
     finally { setLoading(false); }
@@ -809,7 +812,10 @@ function MediaSection() {
       });
       qc.invalidateQueries({ queryKey: ["admin-media"] });
       qc.invalidateQueries({ queryKey: ["meditation-categories"] });
+      qc.invalidateQueries({ queryKey: ["meditation-cat"] });
+      qc.invalidateQueries({ queryKey: ["videos"] });
       qc.invalidateQueries({ queryKey: ["media", editingId] });
+      qc.invalidateQueries({ queryKey: ["media"] });
       setEMsg("✅ Modifiche salvate");
       setTimeout(() => { setEditingId(null); setEMsg(""); }, 900);
     } catch (e: any) {
@@ -889,6 +895,10 @@ function MediaSection() {
   const remove = async (id: string) => {
     await api(`/admin/media/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["admin-media"] });
+    qc.invalidateQueries({ queryKey: ["meditation-categories"] });
+    qc.invalidateQueries({ queryKey: ["meditation-cat"] });
+    qc.invalidateQueries({ queryKey: ["videos"] });
+    qc.invalidateQueries({ queryKey: ["media"] });
   };
 
   return (

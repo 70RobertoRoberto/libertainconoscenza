@@ -33,6 +33,9 @@ export default function MeditationCategoryScreen() {
         `/media?kind=meditation&meditation_category=${encodeURIComponent(category?.name || "")}&lang=${lang}`
       ),
     enabled: !!category,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   if (!category) {
