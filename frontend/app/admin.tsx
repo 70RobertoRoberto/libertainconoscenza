@@ -687,6 +687,74 @@ function MediaSection() {
     }
   };
 
+  const pickAndUploadThumb = async () => {
+    setMsg("");
+    try {
+      const ImagePicker = await import("expo-image-picker");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (perm.status !== "granted") {
+        setMsg("Permesso galleria negato. Attivalo in Impostazioni → App → Expo Go → Permessi.");
+        return;
+      }
+      const pick = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions?.Images ?? "Images",
+        allowsEditing: false,
+        quality: 0.85,
+        exif: false,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset: any = pick.assets[0];
+      setLoading(true);
+      const fileName = asset.fileName || `thumb-${Date.now()}.jpg`;
+      setMsg(`Caricamento anteprima: ${fileName}…`);
+      const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+      const inferredMime =
+        asset.mimeType ||
+        (fileName.toLowerCase().endsWith(".png") ? "image/png"
+          : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
+          : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
+          : "image/jpeg");
+      const token =
+        (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
+        (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
+      if (!token) throw new Error("Non autenticato");
+
+      let j: any;
+      if (Platform.OS === "web") {
+        const form = new FormData();
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, fileName);
+        const res = await fetch(`${backend}/api/admin/upload`, {
+          method: "POST",
+          body: form as any,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        j = await res.json();
+      } else {
+        const result = await FileSystem.uploadAsync(`${backend}/api/admin/upload`, asset.uri, {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: inferredMime,
+          parameters: {},
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!result || result.status < 200 || result.status >= 300) {
+          throw new Error(result?.body || `Errore ${result?.status}`);
+        }
+        j = JSON.parse(result.body || "{}");
+      }
+      setThumb(j.url);
+      const sizeKB = Math.round((j.size || 0) / 1024);
+      setMsg(`✅ Anteprima caricata (${sizeKB} KB).`);
+    } catch (e: any) {
+      setMsg(`Errore anteprima: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const remove = async (id: string) => {
     await api(`/admin/media/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["admin-media"] });
@@ -723,6 +791,21 @@ function MediaSection() {
           </Muted>
         ) : null}
         <TextInput value={thumb} onChangeText={setThumb} placeholder="URL immagine anteprima (facoltativo)" placeholderTextColor={colors.muted} style={[styles.input, { marginTop: spacing.md }]} autoCapitalize="none" />
+        <GoldButton
+          testID="upload-thumb"
+          label="🖼️ Carica immagine anteprima dalla galleria"
+          onPress={pickAndUploadThumb}
+          style={{ marginTop: spacing.sm }}
+          loading={loading}
+        />
+        {thumb ? (
+          <View style={{ marginTop: spacing.sm, alignItems: "center" }}>
+            <Image source={{ uri: thumb }} style={{ width: 140, height: 140, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border }} resizeMode="cover" />
+            <Pressable onPress={() => setThumb("")} style={{ marginTop: spacing.xs }}>
+              <Text style={{ color: colors.brandPrimary, fontSize: 12 }}>Rimuovi anteprima</Text>
+            </Pressable>
+          </View>
+        ) : null}
         <TextInput value={desc} onChangeText={setDesc} placeholder="Descrizione" placeholderTextColor={colors.muted} multiline style={[styles.input, { marginTop: spacing.md, minHeight: 80, textAlignVertical: "top" }]} />
         <TextInput value={duration} onChangeText={setDuration} placeholder="Durata in minuti" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginTop: spacing.md }}>
