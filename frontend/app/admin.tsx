@@ -22,6 +22,7 @@ import { api } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
 import MarkdownEditor from "@/src/MarkdownEditor";
 import { MEDITATION_CATEGORIES as MED_CATS_CONST } from "@/src/meditationCategories";
+import { VIDEO_CATEGORY_NAMES as VIDEO_CATS } from "@/src/videoCategories";
 
 const MEDITATION_CATS = MED_CATS_CONST.map((c) => c.name);
 
@@ -569,6 +570,7 @@ function MediaSection() {
   const [kind, setKind] = useState<"meditation" | "video">("meditation");
   const [cat, setCat] = useState("Meditazione");
   const [medCat, setMedCat] = useState<string>("Armonizzazione e Radicamento");
+  const [videoCats, setVideoCats] = useState<string[]>([]);
   const [duration, setDuration] = useState("");
   const [premium, setPremium] = useState(false);
   const [msg, setMsg] = useState("");
@@ -584,6 +586,7 @@ function MediaSection() {
   const [eKind, setEKind] = useState<"meditation" | "video">("meditation");
   const [eCat, setECat] = useState("Meditazione");
   const [eMedCat, setEMedCat] = useState<string>("Armonizzazione e Radicamento");
+  const [eVideoCats, setEVideoCats] = useState<string[]>([]);
   const [eDuration, setEDuration] = useState("");
   const [ePremium, setEPremium] = useState(false);
   const [eLoading, setELoading] = useState(false);
@@ -594,20 +597,23 @@ function MediaSection() {
     try {
       if (!title || !url) throw new Error("Titolo e URL richiesti");
       if (kind === "meditation" && !medCat) throw new Error("Seleziona una categoria di meditazione");
+      if (kind === "video" && videoCats.length > 2) throw new Error("Massimo 2 categorie video");
       await api("/admin/media", {
         method: "POST",
         body: JSON.stringify({
           title, description: desc, media_url: url,
           thumbnail_url: thumb || null, kind, category: cat,
           meditation_category: kind === "meditation" ? medCat : null,
+          video_categories: kind === "video" ? videoCats : null,
           duration_sec: duration ? parseInt(duration) * 60 : null,
           is_premium: premium,
         }),
       });
-      setTitle(""); setDesc(""); setUrl(""); setThumb(""); setDuration("");
+      setTitle(""); setDesc(""); setUrl(""); setThumb(""); setDuration(""); setVideoCats([]);
       qc.invalidateQueries({ queryKey: ["admin-media"] });
       qc.invalidateQueries({ queryKey: ["meditation-categories"] });
       qc.invalidateQueries({ queryKey: ["meditation-cat"] });
+      qc.invalidateQueries({ queryKey: ["video-categories"] });
       qc.invalidateQueries({ queryKey: ["videos"] });
       qc.invalidateQueries({ queryKey: ["media"] });
       setMsg("Contenuto caricato");
@@ -815,6 +821,7 @@ function MediaSection() {
     setEKind(m.kind === "video" ? "video" : "meditation");
     setECat(m.category || "Meditazione");
     setEMedCat(m.meditation_category || "Armonizzazione e Radicamento");
+    setEVideoCats(Array.isArray(m.video_categories) ? m.video_categories : []);
     setEDuration(m.duration_sec ? String(Math.round(m.duration_sec / 60)) : "");
     setEPremium(!!m.is_premium);
     setEMsg("");
@@ -830,6 +837,7 @@ function MediaSection() {
     setELoading(true); setEMsg("");
     try {
       if (!eTitle || !eUrl) throw new Error("Titolo e URL richiesti");
+      if (eKind === "video" && eVideoCats.length > 2) throw new Error("Massimo 2 categorie video");
       const body: any = {
         title: eTitle,
         description: eDesc,
@@ -837,6 +845,7 @@ function MediaSection() {
         thumbnail_url: eThumb || null,
         category: eCat,
         meditation_category: eKind === "meditation" ? eMedCat : null,
+        video_categories: eKind === "video" ? eVideoCats : null,
         duration_sec: eDuration ? parseInt(eDuration) * 60 : null,
         is_premium: ePremium,
       };
@@ -847,6 +856,7 @@ function MediaSection() {
       qc.invalidateQueries({ queryKey: ["admin-media"] });
       qc.invalidateQueries({ queryKey: ["meditation-categories"] });
       qc.invalidateQueries({ queryKey: ["meditation-cat"] });
+      qc.invalidateQueries({ queryKey: ["video-categories"] });
       qc.invalidateQueries({ queryKey: ["videos"] });
       qc.invalidateQueries({ queryKey: ["media", editingId] });
       qc.invalidateQueries({ queryKey: ["media"] });
@@ -1011,6 +1021,32 @@ function MediaSection() {
           </>
         ) : null}
 
+        {kind === "video" ? (
+          <>
+            <Muted style={{ marginTop: spacing.md, marginBottom: spacing.xs }}>
+              Categorie video (max 2) — {videoCats.length}/2 selezionate
+            </Muted>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+              {VIDEO_CATS.map((c) => {
+                const selected = videoCats.includes(c);
+                return (
+                  <Pressable
+                    key={c}
+                    testID={`video-cat-chip-${c}`}
+                    onPress={() => {
+                      if (selected) setVideoCats(videoCats.filter((x) => x !== c));
+                      else if (videoCats.length < 2) setVideoCats([...videoCats, c]);
+                    }}
+                    style={[styles.smallChip, selected && styles.smallChipActive]}
+                  >
+                    <Text style={selected ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
+        ) : null}
+
         <Pressable onPress={() => setPremium(!premium)} style={{ marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
           <View style={[styles.checkbox, premium && { backgroundColor: colors.brandPrimary }]} />
           <Text style={{ color: colors.onSurface }}>Contenuto Premium</Text>
@@ -1054,6 +1090,28 @@ function MediaSection() {
                       <Text style={eMedCat === c ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
                     </Pressable>
                   ))}
+                </ScrollView>
+              </>
+            ) : null}
+            {eKind === "video" ? (
+              <>
+                <Muted style={{ fontSize: 12 }}>Categorie video (max 2) — {eVideoCats.length}/2</Muted>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+                  {VIDEO_CATS.map((c) => {
+                    const selected = eVideoCats.includes(c);
+                    return (
+                      <Pressable
+                        key={c}
+                        onPress={() => {
+                          if (selected) setEVideoCats(eVideoCats.filter((x) => x !== c));
+                          else if (eVideoCats.length < 2) setEVideoCats([...eVideoCats, c]);
+                        }}
+                        style={[styles.smallChip, selected && styles.smallChipActive]}
+                      >
+                        <Text style={selected ? styles.smallChipTxtActive : styles.smallChipTxt}>{c}</Text>
+                      </Pressable>
+                    );
+                  })}
                 </ScrollView>
               </>
             ) : null}

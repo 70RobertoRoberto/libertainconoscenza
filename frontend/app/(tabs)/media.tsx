@@ -21,6 +21,7 @@ import {
   MEDITATION_HERO_TITLE,
   MEDITATION_ABOUT_TEXT,
 } from "@/src/meditationCategories";
+import { VIDEO_CATEGORY_NAMES } from "@/src/videoCategories";
 
 type Mode = "meditation" | "video";
 
@@ -29,6 +30,7 @@ export default function Media() {
   const router = useRouter();
   const { t, lang } = useLang();
   const [mode, setMode] = useState<Mode>("meditation");
+  const [videoFilter, setVideoFilter] = useState<string | null>(null);
 
   // Category counts (meditations per category)
   const { data: catData, refetch: refetchCats, isFetching: fetchingCats } = useQuery({
@@ -50,8 +52,13 @@ export default function Media() {
 
   // Video list (only fetched when video mode is active)
   const { data: videoData, refetch: refetchVideos, isFetching: fetchingVideos } = useQuery({
-    queryKey: ["videos", lang],
-    queryFn: () => api<{ items: any[] }>(`/media?kind=video&lang=${lang}`),
+    queryKey: ["videos", lang, videoFilter],
+    queryFn: () =>
+      api<{ items: any[] }>(
+        videoFilter
+          ? `/media?kind=video&video_category=${encodeURIComponent(videoFilter)}&lang=${lang}`
+          : `/media?kind=video&lang=${lang}`
+      ),
     enabled: mode === "video",
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
@@ -101,7 +108,13 @@ export default function Media() {
       {mode === "meditation" ? (
         <MeditationContent counts={counts} router={router} />
       ) : (
-        <VideoContent items={videoData?.items || []} router={router} t={t} />
+        <VideoContent
+          items={videoData?.items || []}
+          router={router}
+          t={t}
+          activeFilter={videoFilter}
+          onSelectFilter={setVideoFilter}
+        />
       )}
     </ScrollView>
   );
@@ -171,25 +184,60 @@ function VideoContent({
   items,
   router,
   t,
+  activeFilter,
+  onSelectFilter,
 }: {
   items: any[];
   router: ReturnType<typeof useRouter>;
   t: (k: string) => string;
+  activeFilter: string | null;
+  onSelectFilter: (v: string | null) => void;
 }) {
-  if (items.length === 0) {
-    return (
-      <View style={styles.emptyBox}>
-        <Text style={styles.emptyEmoji}>📺</Text>
-        <Text style={styles.emptyTitle}>Nessun video ancora</Text>
-        <Muted style={{ textAlign: "center", marginTop: 6 }}>
-          Sto per pubblicare nuovi contenuti. Torna a trovarci fra qualche giorno.
-        </Muted>
-      </View>
-    );
-  }
   return (
     <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
-      {items.map((item) => (
+      {/* Filter chips */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.xl, marginBottom: spacing.md }}
+      >
+        <Pressable
+          onPress={() => onSelectFilter(null)}
+          style={[styles.filterChip, !activeFilter && styles.filterChipActive]}
+        >
+          <Text style={!activeFilter ? styles.filterChipTxtActive : styles.filterChipTxt}>
+            Tutti
+          </Text>
+        </Pressable>
+        {VIDEO_CATEGORY_NAMES.map((c) => {
+          const selected = activeFilter === c;
+          return (
+            <Pressable
+              key={c}
+              testID={`video-filter-${c}`}
+              onPress={() => onSelectFilter(selected ? null : c)}
+              style={[styles.filterChip, selected && styles.filterChipActive]}
+            >
+              <Text style={selected ? styles.filterChipTxtActive : styles.filterChipTxt}>{c}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {items.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyEmoji}>📺</Text>
+          <Text style={styles.emptyTitle}>
+            {activeFilter ? `Nessun video in "${activeFilter}"` : "Nessun video ancora"}
+          </Text>
+          <Muted style={{ textAlign: "center", marginTop: 6 }}>
+            {activeFilter
+              ? "Prova con un'altra categoria o tocca Tutti per vedere l'archivio completo."
+              : "Sto per pubblicare nuovi contenuti. Torna a trovarci fra qualche giorno."}
+          </Muted>
+        </View>
+      ) : (
+        items.map((item) => (
         <Pressable
           key={item.id}
           testID={`vid-item-${item.id}`}
@@ -210,6 +258,15 @@ function VideoContent({
                 {item.description}
               </Muted>
             ) : null}
+            {Array.isArray(item.video_categories) && item.video_categories.length > 0 ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+                {item.video_categories.slice(0, 2).map((c: string) => (
+                  <View key={c} style={styles.catBadge}>
+                    <Text style={styles.catBadgeTxt}>{c}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {item.duration_sec ? (
               <Muted style={{ fontSize: 11, marginTop: 4 }}>
                 {`${Math.round(item.duration_sec / 60)} ${t("minutes")}`}
@@ -222,7 +279,8 @@ function VideoContent({
             </View>
           ) : null}
         </Pressable>
-      ))}
+        ))
+      )}
     </View>
   );
 }
@@ -414,4 +472,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   pTxt: { color: colors.onBrandPrimary, fontSize: 9, fontWeight: "800", letterSpacing: 1 },
+  filterChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  filterChipActive: {
+    backgroundColor: colors.brandPrimary,
+    borderColor: colors.brandPrimary,
+  },
+  filterChipTxt: { color: colors.onSurface, fontSize: 12, fontWeight: "600" },
+  filterChipTxtActive: { color: colors.onBrandPrimary, fontSize: 12, fontWeight: "700" },
+  catBadge: {
+    backgroundColor: colors.brandTertiary,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  catBadgeTxt: { color: colors.onBrandTertiary, fontSize: 10, fontWeight: "600" },
 });
