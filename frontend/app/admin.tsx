@@ -299,30 +299,44 @@ function ArticlesSection() {
       const fileName = asset.fileName || `image-${Date.now()}.jpg`;
       setEMsg(`Caricamento: ${fileName}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-      const form = new FormData();
       const inferredMime =
         asset.mimeType ||
         (fileName.toLowerCase().endsWith(".png") ? "image/png"
           : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
           : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
           : "image/jpeg");
-      if (Platform.OS === "web") {
-        const blob = await (await fetch(asset.uri)).blob();
-        form.append("file", blob, fileName);
-      } else {
-        form.append("file", { uri: asset.uri, name: fileName, type: inferredMime } as any);
-      }
       const token =
         (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
         (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
       if (!token) throw new Error("Non autenticato");
-      const res = await fetch(`${backend}/api/admin/upload`, {
-        method: "POST",
-        body: form as any,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const j = await res.json();
+
+      let j: any;
+      if (Platform.OS === "web") {
+        const form = new FormData();
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, fileName);
+        const res = await fetch(`${backend}/api/admin/upload`, {
+          method: "POST",
+          body: form as any,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        j = await res.json();
+      } else {
+        // Native: streaming upload via expo-file-system (no JS memory blowup, no Expo Go crash).
+        const result = await FileSystem.uploadAsync(`${backend}/api/admin/upload`, asset.uri, {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: inferredMime,
+          parameters: {},
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!result || result.status < 200 || result.status >= 300) {
+          throw new Error(result?.body || `Errore ${result?.status}`);
+        }
+        j = JSON.parse(result.body || "{}");
+      }
       setEImage(j.url);
       const sizeKB = Math.round((j.size || 0) / 1024);
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
@@ -440,11 +454,31 @@ function ArticlesSection() {
             </View>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing.xl }}>
               {eImage ? (
-                <Image
-                  source={{ uri: eImage.startsWith("/api/") ? `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}${eImage}` : eImage }}
-                  style={{ width: "100%", height: 160, borderRadius: radius.md, marginBottom: spacing.sm, backgroundColor: colors.surfaceAlt }}
-                  resizeMode="cover"
-                />
+                <View style={{ position: "relative", marginBottom: spacing.sm }}>
+                  <Image
+                    source={{ uri: eImage.startsWith("/api/") ? `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}${eImage}` : eImage }}
+                    style={{ width: "100%", height: 160, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary }}
+                    resizeMode="cover"
+                  />
+                  <Pressable
+                    testID="remove-edit-image"
+                    onPress={() => setEImage("")}
+                    hitSlop={12}
+                    style={{
+                      position: "absolute",
+                      top: 8,
+                      right: 8,
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      backgroundColor: "rgba(0,0,0,0.65)",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>×</Text>
+                  </Pressable>
+                </View>
               ) : null}
               <TextInput
                 testID="edit-image-url"
@@ -1173,30 +1207,42 @@ function AdsSection() {
       const fileName = asset.fileName || `ad-${Date.now()}.jpg`;
       setMsg(`Caricamento: ${fileName}…`);
       const backend = process.env.EXPO_PUBLIC_BACKEND_URL || "";
-      const form = new FormData();
       const inferredMime =
         asset.mimeType ||
         (fileName.toLowerCase().endsWith(".png") ? "image/png"
           : fileName.toLowerCase().endsWith(".webp") ? "image/webp"
           : fileName.toLowerCase().endsWith(".heic") || fileName.toLowerCase().endsWith(".heif") ? "image/heic"
           : "image/jpeg");
-      if (Platform.OS === "web") {
-        const blob = await (await fetch(asset.uri)).blob();
-        form.append("file", blob, fileName);
-      } else {
-        form.append("file", { uri: asset.uri, name: fileName, type: inferredMime } as any);
-      }
       const token =
         (await (await import("expo-secure-store")).getItemAsync("ca_token").catch(() => null)) ||
         (typeof window !== "undefined" ? window.localStorage.getItem("ca_token") : null);
       if (!token) throw new Error("Non autenticato");
-      const res = await fetch(`${backend}/api/admin/upload`, {
-        method: "POST",
-        body: form as any,
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const j = await res.json();
+      let j: any;
+      if (Platform.OS === "web") {
+        const form = new FormData();
+        const blob = await (await fetch(asset.uri)).blob();
+        form.append("file", blob, fileName);
+        const res = await fetch(`${backend}/api/admin/upload`, {
+          method: "POST",
+          body: form as any,
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(await res.text());
+        j = await res.json();
+      } else {
+        const result = await FileSystem.uploadAsync(`${backend}/api/admin/upload`, asset.uri, {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+          fieldName: "file",
+          mimeType: inferredMime,
+          parameters: {},
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!result || result.status < 200 || result.status >= 300) {
+          throw new Error(result?.body || `Errore ${result?.status}`);
+        }
+        j = JSON.parse(result.body || "{}");
+      }
       setImage(j.url);
       const sizeKB = Math.round((j.size || 0) / 1024);
       const sizeStr = sizeKB > 1024 ? `${(sizeKB / 1024).toFixed(1)} MB` : `${sizeKB} KB`;
