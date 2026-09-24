@@ -9,7 +9,7 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   "Discipline orientali": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=800",
   "Naturopatia": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/j11ofvjy_image.png",
   "Psicologia": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800",
-  "Medicina Integrata": "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800",
+  "Medicina Integrata": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/zx3z6hw1_image.png",
   "Filosofia": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800",
   "Nutrizione": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800",
   "Somatognostica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/zhetcb4o_Somatognostica1.png",
