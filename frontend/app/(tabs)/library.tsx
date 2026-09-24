@@ -19,7 +19,7 @@ import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
 
-// The 12 displayed categories in priority order.
+// The 13 displayed categories in priority order.
 const DISPLAY_CATEGORIES = [
   "Coscienza",
   "Fisica quantistica",
@@ -29,10 +29,11 @@ const DISPLAY_CATEGORIES = [
   "Tradizioni Esoteriche",
   "Guarigione Energetica",
   "Discipline orientali",
-  "Medicina Integrata",
   "Naturopatia",
   "Psicologia",
   "Nutrizione",
+  "Crescita personale",
+  "Medicina Integrata",
 ];
 
 type CategoryCount = { name: string; count: number };
