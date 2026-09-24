@@ -8,7 +8,7 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   "Meditazione": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
   "Discipline orientali": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=800",
   "Naturopatia": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/j11ofvjy_image.png",
-  "Psicologia": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800",
+  "Psicologia": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/72b686qm_psicologia.jpg",
   "Medicina Integrata": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/zx3z6hw1_image.png",
   "Filosofia": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800",
   "Nutrizione": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800",
