@@ -13,6 +13,9 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   "Filosofia": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800",
   "Nutrizione": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800",
   "Somatognostica": "https://images.unsplash.com/photo-1588406320565-9fa6d9901d1d?w=800",
+  "Coscienza": "https://images.unsplash.com/photo-1544216428-8bff2cb03ca7?w=800",
+  "Tradizioni Esoteriche": "https://images.unsplash.com/photo-1466442929976-97f336a657be?w=800",
+  "Guarigione Energetica": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
   "Video": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
 };
 

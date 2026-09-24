@@ -64,6 +64,9 @@ CATEGORIES = [
     "Filosofia",
     "Nutrizione",
     "Somatognostica",
+    "Coscienza",
+    "Tradizioni Esoteriche",
+    "Guarigione Energetica",
     "Video",
 ]
 
@@ -1099,6 +1102,19 @@ async def list_articles(
     items = [_serialize_article(a, lang) async for a in cursor]
     # Hide premium body for free users? We still show, but frontend gates
     return {"items": items}
+
+
+@api.get("/articles/counts")
+async def articles_counts(user: dict = Depends(current_user)):
+    """Total articles per category (for library index page)."""
+    pipeline = [
+        {"$group": {"_id": "$category", "count": {"$sum": 1}}},
+    ]
+    counts = {}
+    async for row in db.articles.aggregate(pipeline):
+        counts[row["_id"] or ""] = row.get("count", 0)
+    total = await db.articles.count_documents({})
+    return {"counts": counts, "total": total}
 
 
 @api.get("/articles/{article_id}")

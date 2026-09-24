@@ -80,6 +80,9 @@ export const CATEGORY_LABELS: Record<string, { it: string; en: string }> = {
   "Filosofia": { it: "Filosofia", en: "Philosophy" },
   "Nutrizione": { it: "Nutrizione", en: "Nutrition" },
   "Somatognostica": { it: "Somatognostica", en: "Somatognostics" },
+  "Coscienza": { it: "Coscienza", en: "Consciousness" },
+  "Tradizioni Esoteriche": { it: "Tradizioni Esoteriche", en: "Esoteric Traditions" },
+  "Guarigione Energetica": { it: "Guarigione Energetica", en: "Energy Healing" },
   "Video": { it: "Video", en: "Video" },
 };
 
