@@ -2,7 +2,7 @@ export const LOGO_URL =
   "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/ttle9je1_Logo%20App.jpg";
 
 export const CATEGORY_IMAGES: Record<string, string> = {
-  "Crescita personale": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800",
+  "Crescita personale": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/87361lpg_image.png",
   "Spirituale": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/vjy4r6b9_image.png",
   "Fisica quantistica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/e722nhoc_image.png",
   "Meditazione": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
