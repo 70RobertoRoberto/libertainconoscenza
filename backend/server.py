@@ -1557,26 +1557,68 @@ async def stats_summary():
     total_media = await db.media.count_documents({})
     total_views = await db.views.count_documents({})
     premium_users = await db.users.count_documents({"subscription.status": "premium"})
+
+    # App start date = earliest view date (fallback: earliest user, then today)
+    app_start_date: Optional[str] = None
+    earliest_view = await db.views.find_one({}, sort=[("date", 1)])
+    if earliest_view and earliest_view.get("date"):
+        app_start_date = earliest_view["date"]
+    else:
+        earliest_user = await db.users.find_one({}, sort=[("created_at", 1)])
+        if earliest_user and earliest_user.get("created_at"):
+            app_start_date = earliest_user["created_at"][:10]
+        else:
+            app_start_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+    now = datetime.utcnow()
+    month_prefix = now.strftime("%Y-%m")  # "YYYY-MM"
+    year_prefix = now.strftime("%Y")
+
+    # Views in the current month/year using the "date" (YYYY-MM-DD) string field.
+    views_month = await db.views.count_documents({"date": {"$regex": f"^{month_prefix}"}})
+    views_year = await db.views.count_documents({"date": {"$regex": f"^{year_prefix}"}})
+
+    # Today's views
+    today_str = now.strftime("%Y-%m-%d")
+    views_today = await db.views.count_documents({"date": today_str})
+
     return {
         "users": total_users,
         "premium_users": premium_users,
         "articles": total_articles,
         "media": total_media,
         "total_views": total_views,
+        "app_start_date": app_start_date,
+        "views_today": views_today,
+        "views_month": views_month,
+        "views_year": views_year,
+        "current_month": month_prefix,
+        "current_year": year_prefix,
     }
 
 
 @api.get("/admin/stats/daily", dependencies=[Depends(require_admin)])
 async def stats_daily(days: int = 14):
+    """Return the last `days` days including days with zero views."""
+    from datetime import timedelta
+    today = datetime.utcnow().date()
+    start_date = today - timedelta(days=days - 1)
+    start_str = start_date.strftime("%Y-%m-%d")
+
     pipeline = [
+        {"$match": {"date": {"$gte": start_str}}},
         {"$group": {"_id": "$date", "count": {"$sum": 1}}},
-        {"$sort": {"_id": -1}},
-        {"$limit": days},
     ]
-    result = []
+    counts: dict = {}
     async for row in db.views.aggregate(pipeline):
-        result.append({"date": row["_id"], "views": row["count"]})
-    result.reverse()
+        counts[row["_id"]] = row.get("count", 0)
+
+    # Build continuous range, filling zeros for missing days.
+    result = []
+    for i in range(days):
+        d = start_date + timedelta(days=i)
+        ds = d.strftime("%Y-%m-%d")
+        result.append({"date": ds, "views": counts.get(ds, 0)})
     return {"items": result}
 
 

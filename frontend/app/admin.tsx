@@ -120,6 +120,17 @@ function StatsSection() {
   });
 
   const maxViews = Math.max(1, ...(daily?.items || []).map((x) => x.views));
+  const formatDate = (iso?: string) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+  };
+  const currentMonthLabel = (() => {
+    const d = new Date();
+    return d.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  })();
+  const currentYearLabel = String(new Date().getFullYear());
 
   return (
     <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
@@ -128,18 +139,29 @@ function StatsSection() {
         <StatCard label="Premium" value={summary?.premium_users ?? "—"} />
         <StatCard label="Articoli" value={summary?.articles ?? "—"} />
         <StatCard label="Media" value={summary?.media ?? "—"} />
-        <StatCard label="Viste totali" value={summary?.total_views ?? "—"} full />
       </View>
 
-      <Text style={styles.section}>Visualizzazioni giornaliere</Text>
+      <Text style={styles.section}>Andamento visite</Text>
+      <View style={{ flexDirection: "row", gap: spacing.md, flexWrap: "wrap" }}>
+        <StatCard label={`App attiva dal`} value={formatDate(summary?.app_start_date)} full />
+        <StatCard label={`Visite totali da inizio`} value={summary?.total_views ?? "—"} full />
+        <StatCard label={`Visite oggi`} value={summary?.views_today ?? 0} />
+        <StatCard label={`Visite ${currentMonthLabel}`} value={summary?.views_month ?? 0} />
+        <StatCard label={`Visite ${currentYearLabel}`} value={summary?.views_year ?? 0} full />
+      </View>
+
+      <Text style={styles.section}>Visualizzazioni giornaliere (ultimi 14 giorni)</Text>
       <Card>
         <View style={{ flexDirection: "row", alignItems: "flex-end", height: 160, gap: 4 }}>
           {(daily?.items || []).map((d) => (
             <View key={d.date} style={{ flex: 1, alignItems: "center" }}>
+              <Text style={{ fontSize: 9, color: colors.brandPrimary, marginBottom: 2, fontWeight: "700" }}>
+                {d.views > 0 ? d.views : ""}
+              </Text>
               <View style={{
                 width: "100%",
                 height: `${(d.views / maxViews) * 100}%`,
-                backgroundColor: colors.brandPrimary,
+                backgroundColor: d.views > 0 ? colors.brandPrimary : colors.borderStrong,
                 borderRadius: 4,
                 minHeight: 2,
               }} />
