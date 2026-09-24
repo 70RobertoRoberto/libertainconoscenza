@@ -3,7 +3,7 @@ export const LOGO_URL =
 
 export const CATEGORY_IMAGES: Record<string, string> = {
   "Crescita personale": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800",
-  "Spirituale": "https://images.unsplash.com/photo-1600181982553-ce7d36051c01?w=800",
+  "Spirituale": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/vjy4r6b9_image.png",
   "Fisica quantistica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/e722nhoc_image.png",
   "Meditazione": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
   "Discipline orientali": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=800",
