@@ -83,7 +83,7 @@ export default function ArticleDetail() {
 
   const backendBase = process.env.EXPO_PUBLIC_BACKEND_URL || "";
   const shareUrl = `${backendBase}/api/share/article/${data.id}`;
-  const shareText = `${data.title}\n\n${shareUrl}\n\n— da Conoscenza Aperta`;
+  const shareText = `${data.title}\n\n${shareUrl}\n\n— da Libertà in Conoscenza`;
   const shareWA = () =>
     Linking.openURL(`https://wa.me/?text=${encodeURIComponent(shareText)}`);
   const shareTG = () =>

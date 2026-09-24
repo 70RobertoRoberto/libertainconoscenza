@@ -19,7 +19,7 @@ const PARAGRAPHS: string[] = [
   `Come sempre buonsenso, professionalità e responsabilità sono alla base di una buona e corretta interazione con le persone.`,
   `Questa App quindi, non fornisce consigli medici, non fornisce prescrizioni di alcun tipo e il suo compito è quello di far conoscere tecniche e pratiche per il miglioramento del benessere psico-fisico-spirituale.`,
   `Gli Autori non si assumono nessuna responsabilità per eventuali danni di qualsiasi natura che potreste causare a Voi stessi o a terzi, derivanti dall'uso improprio o illecito delle informazioni riportate o da errori e imprecisioni relativi al loro contenuto o da libere interpretazioni, o da qualsiasi azione che possiate intraprendere autonomamente.`,
-  `Gli Autori dell'App di Conoscenza Aperta non sono responsabili per quanto pubblicato dai lettori nei commenti ad ogni post. Verranno cancellati i commenti ritenuti offensivi o lesivi dell'immagine o dell'onorabilità di terzi, di genere spam, razzisti o che contengano dati personali non conformi al rispetto delle norme sulla Privacy e, in ogni caso, ritenuti inadatti ad insindacabile giudizio dell'amministratore dell'App stessa.`,
+  `Gli Autori dell'App di Libertà in Conoscenza non sono responsabili per quanto pubblicato dai lettori nei commenti ad ogni post. Verranno cancellati i commenti ritenuti offensivi o lesivi dell'immagine o dell'onorabilità di terzi, di genere spam, razzisti o che contengano dati personali non conformi al rispetto delle norme sulla Privacy e, in ogni caso, ritenuti inadatti ad insindacabile giudizio dell'amministratore dell'App stessa.`,
   `Alcuni testi o immagini inserite in questa App possono essere tratte da internet (raramente) e, pertanto, considerate di pubblico dominio; qualora la loro pubblicazione violasse eventuali diritti d'autore, vogliate comunicarlo via e-mail a: ${CONTACT_EMAIL} e saranno immediatamente rimossi.`,
 ];
 
@@ -54,7 +54,7 @@ export default function Disclaimer() {
 
         <View style={styles.signatureBox}>
           <Text style={styles.signatureTxt}>Grazie</Text>
-          <Text style={styles.signatureTxt}>Direzione Conoscenza Aperta</Text>
+          <Text style={styles.signatureTxt}>Direzione Libertà in Conoscenza</Text>
         </View>
 
         <Pressable onPress={() => Linking.openURL(`mailto:${CONTACT_EMAIL}`)}>

@@ -1964,10 +1964,10 @@ def _og_html(title: str, description: str, image: str, url: str, kind: str = "ar
 <head>
 <meta charset=\"utf-8\"/>
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
-<title>{title_e} — Conoscenza Aperta</title>
+<title>{title_e} — Libertà in Conoscenza</title>
 <meta name=\"description\" content=\"{desc_e}\"/>
 <meta property=\"og:type\" content=\"article\"/>
-<meta property=\"og:site_name\" content=\"Conoscenza Aperta\"/>
+<meta property=\"og:site_name\" content=\"Libertà in Conoscenza\"/>
 <meta property=\"og:title\" content=\"{title_e}\"/>
 <meta property=\"og:description\" content=\"{desc_e}\"/>
 <meta property=\"og:image\" content=\"{esc(image)}\"/>
@@ -1999,14 +1999,14 @@ def _og_html(title: str, description: str, image: str, url: str, kind: str = "ar
 </head>
 <body>
 <div class=\"wrap\">
-  <div class=\"brand\">CONOSCENZA APERTA</div>
+  <div class=\"brand\">LIBERTÀ IN CONOSCENZA</div>
   <div class=\"cat\">{esc(kind)}</div>
   <h1>{title_e}</h1>
   <img src=\"{esc(image)}\" alt=\"{title_e}\"/>
   <p>{desc_e}</p>
   <div class=\"gate\">
     <h2>🔐 {action}</h2>
-    <p>Unisciti alla community <b>Conoscenza Aperta</b> e accedi a corsi, meditazioni, video, articoli approfonditi e messaggi personali dalla community.</p>
+    <p>Unisciti alla community <b>Libertà in Conoscenza</b> e accedi a corsi, meditazioni, video, articoli approfonditi e messaggi personali dalla community.</p>
     <div class=\"cta-row\">
       <a class=\"cta\" id=\"ctaJoin\" href=\"{esc(web_register_url)}\" onclick=\"return tryDeepLink(event)\">Iscriviti ora</a>
       <a class=\"cta secondary\" href=\"{esc(web_register_url)}\">Apri sul web</a>

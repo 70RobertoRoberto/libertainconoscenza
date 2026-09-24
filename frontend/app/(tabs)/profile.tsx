@@ -26,7 +26,7 @@ export default function Profile() {
 
   const shareReferral = async () => {
     if (!ref?.code) return;
-    const message = `Ti invito a scoprire Conoscenza Aperta 🌿\n\nUsa il mio codice per iscriverti: ${ref.code}\n\n— Conoscenza Aperta, sapienza per crescere`;
+    const message = `Ti invito a scoprire Libertà in Conoscenza 🌿\n\nUsa il mio codice per iscriverti: ${ref.code}\n\n— Libertà in Conoscenza, sapienza per crescere`;
     try {
       await Share.share({ message });
     } catch {

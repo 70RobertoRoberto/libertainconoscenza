@@ -94,7 +94,7 @@ export const STRINGS = {
   it: {
     // Auth
     tagline: "Sapienza per crescere",
-    login_title: "Conoscenza Aperta",
+    login_title: "Libertà in Conoscenza",
     login_subtitle: "Accedi alla tua comunità di conoscenza",
     phone: "Numero di telefono",
     password: "Password",
@@ -181,7 +181,7 @@ export const STRINGS = {
     apply: "Applica",
     coupon_applied: "Codice {code} applicato",
     // Share
-    share_from: "— da Conoscenza Aperta",
+    share_from: "— da Libertà in Conoscenza",
     // Errors
     err_creds: "Inserisci telefono e password",
     err_min: "Password minimo 6 caratteri",
@@ -189,7 +189,7 @@ export const STRINGS = {
   },
   en: {
     tagline: "Wisdom to grow",
-    login_title: "Conoscenza Aperta",
+    login_title: "Libertà in Conoscenza",
     login_subtitle: "Sign in to your community of knowledge",
     phone: "Phone number",
     password: "Password",
@@ -268,7 +268,7 @@ export const STRINGS = {
     have_coupon: "Have a discount code?",
     apply: "Apply",
     coupon_applied: "Code {code} applied",
-    share_from: "— from Conoscenza Aperta",
+    share_from: "— from Libertà in Conoscenza",
     err_creds: "Enter phone and password",
     err_min: "Password min 6 characters",
     err_required: "Phone and password required",

@@ -8,7 +8,7 @@ import { LOGO_URL } from "@/src/assets";
 
 const TELEGRAM_URL = "https://t.me/conoscenza_aperta";
 
-const ABOUT_INTRO = `Il progetto di Conoscenza Aperta è il nuovo Inizio in cui le nostre valorose conoscenze sono riposte in valenza di chi vuole aderire a un progetto di grande cambiamento in attivo, sia in virtù migliorativa della propria vita in ritrovo qualificato di Ben Essere e sia in qualità autentica di Conoscenza riposta in grande valore di apporto per Tutti.
+const ABOUT_INTRO = `Il progetto di Libertà in Conoscenza è il nuovo Inizio in cui le nostre valorose conoscenze sono riposte in valenza di chi vuole aderire a un progetto di grande cambiamento in attivo, sia in virtù migliorativa della propria vita in ritrovo qualificato di Ben Essere e sia in qualità autentica di Conoscenza riposta in grande valore di apporto per Tutti.
 
 Il nostro obiettivo è perciò nobile e ideale, in ambito di valori da conseguire e apporre con considerazione unificata, ossia tutte le valenze di conoscenza sono qua ben amate, se portate con valore conseguito e condiviso e perciò in supporto di tutti per amore di anima e di anime e di virtù in vita da consigliare sempre per tutti quelli che vogliono trovare giovamento nel cambiamento in conoscenza di se stessi e in supporto per altri.
 
@@ -116,7 +116,7 @@ export default function About() {
         <Card style={styles.tgCard}>
           <Text style={styles.tgTitle}>📡  Unisciti al canale Telegram</Text>
           <Muted style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Contenuti esclusivi, eventi e aggiornamenti dal progetto Conoscenza Aperta.
+            Contenuti esclusivi, eventi e aggiornamenti dal progetto Libertà in Conoscenza.
           </Muted>
           <Pressable testID="open-telegram" onPress={openTelegram} style={styles.tgBtn}>
             <Text style={styles.tgBtnTxt}>Apri Telegram · @conoscenza_aperta</Text>

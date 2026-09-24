@@ -64,7 +64,7 @@ export async function generateCertificate(c: CertData) {
       </div>
       <div class="foot-item">
         <div class="foot-lbl">Firma</div>
-        <div class="foot-val" style="font-style:italic;">Conoscenza Aperta</div>
+        <div class="foot-val" style="font-style:italic;">Libertà in Conoscenza</div>
       </div>
       <div class="foot-item">
         <div class="foot-lbl">ID</div>

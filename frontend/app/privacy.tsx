@@ -4,14 +4,14 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/src/theme";
 
-const APP_NAME = "Conoscenza Aperta";
+const APP_NAME = "Libertà in Conoscenza";
 const CONTACT_EMAIL = "info@scienzebiofisiche.it";
 
 const SECTIONS: { title: string; body: string }[] = [
   {
     title: "1. Chi è il Titolare del trattamento",
     body:
-      `Il Titolare del trattamento dei dati personali raccolti tramite l'app ${APP_NAME} è il team di Conoscenza Aperta. Per qualsiasi domanda o richiesta relativa alla tua privacy puoi scrivere a ${CONTACT_EMAIL}.`,
+      `Il Titolare del trattamento dei dati personali raccolti tramite l'app ${APP_NAME} è il team di Libertà in Conoscenza. Per qualsiasi domanda o richiesta relativa alla tua privacy puoi scrivere a ${CONTACT_EMAIL}.`,
   },
   {
     title: "2. Dati che raccogliamo",
@@ -26,7 +26,7 @@ const SECTIONS: { title: string; body: string }[] = [
   {
     title: "4. Base giuridica",
     body:
-      `Il trattamento è basato su: esecuzione del contratto tra te e Conoscenza Aperta (art. 6.1.b GDPR) per le funzioni essenziali dell'app; consenso (art. 6.1.a GDPR) per l'invio di notifiche push; legittimo interesse (art. 6.1.f GDPR) per statistiche aggregate anonime e prevenzione abusi.`,
+      `Il trattamento è basato su: esecuzione del contratto tra te e Libertà in Conoscenza (art. 6.1.b GDPR) per le funzioni essenziali dell'app; consenso (art. 6.1.a GDPR) per l'invio di notifiche push; legittimo interesse (art. 6.1.f GDPR) per statistiche aggregate anonime e prevenzione abusi.`,
   },
   {
     title: "5. Conservazione dei dati",

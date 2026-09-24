@@ -4,14 +4,14 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing } from "@/src/theme";
 
-const APP_NAME = "Conoscenza Aperta";
+const APP_NAME = "Libertà in Conoscenza";
 const CONTACT_EMAIL = "info@scienzebiofisiche.it";
 
 const SECTIONS: { title: string; body: string }[] = [
   {
     title: "1. Chi siamo e cosa offriamo",
     body:
-      `Conoscenza Aperta è un'applicazione mobile dedicata alla crescita personale, spirituale e al Ben Essere, che raccoglie articoli, meditazioni audio e video su temi come biofisica quantistica, meditazione, naturopatia, medicina integrata, filosofia e discipline orientali. L'app è offerta gratuitamente per la fruizione dei contenuti base; alcuni contenuti avanzati sono riservati a utenti abbonati.`,
+      `Libertà in Conoscenza è un'applicazione mobile dedicata alla crescita personale, spirituale e al Ben Essere, che raccoglie articoli, meditazioni audio e video su temi come biofisica quantistica, meditazione, naturopatia, medicina integrata, filosofia e discipline orientali. L'app è offerta gratuitamente per la fruizione dei contenuti base; alcuni contenuti avanzati sono riservati a utenti abbonati.`,
   },
   {
     title: "2. Registrazione e uso dell'account",
@@ -36,12 +36,12 @@ const SECTIONS: { title: string; body: string }[] = [
   {
     title: "6. Proprietà intellettuale",
     body:
-      `Tutti i contenuti presenti nell'app (articoli, meditazioni, video, immagini, marchio, grafica) sono proprietà di Conoscenza Aperta o dei rispettivi autori e sono protetti dalle leggi sul diritto d'autore. È vietato copiare, ridistribuire, rivendere o pubblicare i contenuti al di fuori dell'app senza autorizzazione scritta. È consentito condividere singoli articoli tramite le funzioni di condivisione integrate.`,
+      `Tutti i contenuti presenti nell'app (articoli, meditazioni, video, immagini, marchio, grafica) sono proprietà di Libertà in Conoscenza o dei rispettivi autori e sono protetti dalle leggi sul diritto d'autore. È vietato copiare, ridistribuire, rivendere o pubblicare i contenuti al di fuori dell'app senza autorizzazione scritta. È consentito condividere singoli articoli tramite le funzioni di condivisione integrate.`,
   },
   {
     title: "7. Contenuti a scopo informativo",
     body:
-      `I contenuti dell'app hanno finalità informative, culturali e di crescita personale. NON sono consigli medici, psicologici, terapeutici o farmaceutici e non sostituiscono in alcun modo il parere di un medico o di un professionista qualificato. Per problemi di salute rivolgiti sempre a un medico. Conoscenza Aperta non risponde di eventuali decisioni prese dagli utenti sulla base dei contenuti pubblicati.`,
+      `I contenuti dell'app hanno finalità informative, culturali e di crescita personale. NON sono consigli medici, psicologici, terapeutici o farmaceutici e non sostituiscono in alcun modo il parere di un medico o di un professionista qualificato. Per problemi di salute rivolgiti sempre a un medico. Libertà in Conoscenza non risponde di eventuali decisioni prese dagli utenti sulla base dei contenuti pubblicati.`,
   },
   {
     title: "8. Limitazione di responsabilità",

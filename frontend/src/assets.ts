@@ -1,5 +1,5 @@
 export const LOGO_URL =
-  "https://customer-assets-4nw71qhi.emergentagent.net/job_2aed880b-f54c-4209-b528-13036f6c6a81/artifacts/gdsb7lru_CONOSCENZA%20APERTA%20Logo.png";
+  "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/ttle9je1_Logo%20App.jpg";
 
 export const CATEGORY_IMAGES: Record<string, string> = {
   "Crescita personale": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800",

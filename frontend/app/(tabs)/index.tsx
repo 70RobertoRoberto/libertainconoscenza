@@ -96,7 +96,7 @@ export default function Home() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                 <Image source={{ uri: LOGO_URL }} style={styles.logoSmall} />
                 <View>
-                  <Text style={styles.brandTitle}>Conoscenza Aperta</Text>
+                  <Text style={styles.brandTitle}>Libertà in Conoscenza</Text>
                   <Muted style={{ fontSize: 11 }}>{t("tagline")}</Muted>
                 </View>
               </View>
@@ -126,7 +126,7 @@ export default function Home() {
                 style={styles.aboutBanner}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.aboutBannerTitle}>✨  Benvenuto in Conoscenza Aperta</Text>
+                  <Text style={styles.aboutBannerTitle}>✨  Benvenuto in Libertà in Conoscenza</Text>
                   <Text style={styles.aboutBannerBody}>
                     Scopri il progetto, gli ideatori e la nostra visione del Ben Essere →
                   </Text>
