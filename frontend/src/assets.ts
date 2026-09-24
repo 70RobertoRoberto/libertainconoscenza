@@ -7,15 +7,15 @@ export const CATEGORY_IMAGES: Record<string, string> = {
   "Fisica quantistica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/e722nhoc_image.png",
   "Meditazione": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
   "Discipline orientali": "https://images.unsplash.com/photo-1545389336-cf090694435e?w=800",
-  "Naturopatia": "https://images.unsplash.com/photo-1612703508477-00e02a9b170c?w=800",
+  "Naturopatia": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/j11ofvjy_image.png",
   "Psicologia": "https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=800",
   "Medicina Integrata": "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800",
   "Filosofia": "https://images.unsplash.com/photo-1519791883288-dc8bd696e667?w=800",
   "Nutrizione": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800",
   "Somatognostica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/zhetcb4o_Somatognostica1.png",
   "Coscienza": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/x4idrulc_Dio.jpg",
-  "Tradizioni Esoteriche": "https://images.unsplash.com/photo-1466442929976-97f336a657be?w=800",
-  "Guarigione Energetica": "https://images.unsplash.com/photo-1508672019048-805c876b67e2?w=800",
+  "Tradizioni Esoteriche": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/b5z3j0zs_image.png",
+  "Guarigione Energetica": "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/3zbe2bgo_image.png",
   "Video": "https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=800",
 };
 
