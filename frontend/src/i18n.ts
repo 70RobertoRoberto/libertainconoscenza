@@ -113,6 +113,7 @@ export const STRINGS = {
     tab_home: "Home",
     tab_library: "Biblioteca",
     tab_media: "Media",
+    tab_courses: "Corsi",
     tab_messages: "Messaggi",
     tab_profile: "Profilo",
     // Content
@@ -207,6 +208,7 @@ export const STRINGS = {
     tab_home: "Home",
     tab_library: "Library",
     tab_media: "Media",
+    tab_courses: "Courses",
     tab_messages: "Messages",
     tab_profile: "Profile",
     latest_articles: "Latest articles",

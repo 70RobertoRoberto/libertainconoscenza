@@ -31,6 +31,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: t("tab_home"), tabBarIcon: ({ focused }) => <TabIcon label="✦" focused={focused} /> }} />
       <Tabs.Screen name="library" options={{ title: t("tab_library"), tabBarIcon: ({ focused }) => <TabIcon label="◈" focused={focused} /> }} />
       <Tabs.Screen name="media" options={{ title: t("tab_media"), tabBarIcon: ({ focused }) => <TabIcon label="◉" focused={focused} /> }} />
+      <Tabs.Screen name="corsi" options={{ title: t("tab_courses"), tabBarIcon: ({ focused }) => <TabIcon label="◇" focused={focused} /> }} />
       <Tabs.Screen name="messages" options={{ title: t("tab_messages"), tabBarIcon: ({ focused }) => <TabIcon label="✉" focused={focused} /> }} />
       <Tabs.Screen name="profile" options={{ title: t("tab_profile"), tabBarIcon: ({ focused }) => <TabIcon label="◐" focused={focused} /> }} />
     </Tabs>
