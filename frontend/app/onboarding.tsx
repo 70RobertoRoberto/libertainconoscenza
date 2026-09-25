@@ -62,7 +62,7 @@ const SLIDES: Slide[] = [
       "Corsi per formarti.",
     ],
     footer:
-      "Due livelli di accesso:\n\n• Base — aperto a tutti per iniziare, esplorare e costruire basi solide.\n• Premium — approfondimento qualificato per professionisti e per la tua evoluzione personale.\n\nIl Base non è un livello inferiore: è la libertà di iniziare.\nIl Premium non è un livello superiore della persona: è la libertà di andare oltre.\nLa libertà resta di tutti.",
+      "Due livelli di accesso:\n\n• Base — aperto a tutti per iniziare, esplorare e costruire basi solide.\n• Premium — approfondimento qualificato per professionisti e per la tua evoluzione personale.\n\nLa libertà resta di tutti.",
     cta: "Avanti",
   },
   {
