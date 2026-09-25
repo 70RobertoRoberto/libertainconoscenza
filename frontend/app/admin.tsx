@@ -27,9 +27,10 @@ import { VIDEO_CATEGORY_NAMES as VIDEO_CATS } from "@/src/videoCategories";
 const MEDITATION_CATS = MED_CATS_CONST.map((c) => c.name);
 
 const CATEGORIES = [
-  "Crescita personale", "Spirituale", "Fisica quantistica", "Meditazione",
-  "Discipline orientali", "Naturopatia", "Psicologia", "Medicina Integrata",
-  "Filosofia", "Nutrizione", "Somatognostica", "Video",
+  "Coscienza", "Fisica quantistica", "Spirituale", "Meditazione",
+  "Somatognostica", "Tradizioni Esoteriche", "Guarigione Energetica",
+  "Discipline orientali", "Naturopatia", "Psicologia", "Nutrizione",
+  "Crescita personale", "Medicina Integrata", "Filosofia", "Video",
 ];
 
 type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets";
