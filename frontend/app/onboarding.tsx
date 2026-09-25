@@ -34,10 +34,12 @@ const WHITE = "#FFFFFF";
 
 const ONBOARDING_KEY = "has_seen_onboarding";
 
+type BulletItem = string | { name: string; desc: string };
+
 type Slide = {
   title: string;
   body: string[]; // paragraphs
-  bullets?: string[];
+  bullets?: BulletItem[];
   footer?: string;
   cta: string;
 };
@@ -57,9 +59,18 @@ const SLIDES: Slide[] = [
     title: "Tutto ciò che ti serve per crescere",
     body: ["Qua puoi trovare:"],
     bullets: [
-      "Articoli per informarti.",
-      "Meditazioni per star bene.",
-      "Corsi per formarti.",
+      {
+        name: "Biblioteca",
+        desc: "Articoli approfonditi per informarti e formarti su coscienza, biofisica, spiritualità, naturopatia, medicina integrata e molto altro.",
+      },
+      {
+        name: "Media",
+        desc: "Meditazioni — percorsi guidati per centrarti, ritrovare chiarezza e coltivare la tua evoluzione personale. Non solo rilassamento: uno strumento di presenza e consapevolezza.\nVideo informativi su vari argomenti.",
+      },
+      {
+        name: "Corsi",
+        desc: "Percorsi strutturati per formarti in profondità, al tuo ritmo.",
+      },
     ],
     footer:
       "Due livelli di accesso:\n\n• Base — aperto a tutti per iniziare, esplorare e costruire basi solide.\n• Premium — approfondimento qualificato per professionisti e per la tua evoluzione personale.\n\nLa libertà resta di tutti.",
@@ -170,12 +181,25 @@ export default function Onboarding() {
 
               {s.bullets ? (
                 <View style={styles.bulletBlock}>
-                  {s.bullets.map((b, k) => (
-                    <View key={k} style={styles.bulletRow}>
-                      <Text style={styles.bulletDot}>◆</Text>
-                      <Text style={styles.bulletTxt}>{b}</Text>
-                    </View>
-                  ))}
+                  {s.bullets.map((b, k) => {
+                    if (typeof b === "string") {
+                      return (
+                        <View key={k} style={styles.bulletRow}>
+                          <Text style={styles.bulletDot}>◆</Text>
+                          <Text style={styles.bulletTxt}>{b}</Text>
+                        </View>
+                      );
+                    }
+                    return (
+                      <View key={k} style={styles.richItem}>
+                        <View style={styles.richHeader}>
+                          <Text style={styles.bulletDot}>◆</Text>
+                          <Text style={styles.richName}>{b.name}</Text>
+                        </View>
+                        <Text style={styles.richDesc}>{b.desc}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               ) : null}
 
@@ -302,6 +326,28 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     flex: 1,
     fontWeight: "600",
+  },
+  richItem: {
+    marginBottom: 4,
+  },
+  richHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 4,
+  },
+  richName: {
+    color: WHITE,
+    fontSize: 17,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+  },
+  richDesc: {
+    color: WHITE_SOFT,
+    fontSize: 14,
+    lineHeight: 20,
+    marginLeft: 24,
+    fontFamily: "Georgia",
   },
   footer: {
     color: WHITE_SOFT,
