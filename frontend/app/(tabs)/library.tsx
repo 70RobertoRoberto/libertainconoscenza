@@ -19,7 +19,7 @@ import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
 
-// The 13 displayed categories in priority order.
+// The 14 displayed categories in priority order.
 const DISPLAY_CATEGORIES = [
   "Coscienza",
   "Fisica quantistica",
@@ -34,6 +34,7 @@ const DISPLAY_CATEGORIES = [
   "Nutrizione",
   "Crescita personale",
   "Medicina Integrata",
+  "Filosofia",
 ];
 
 type CategoryCount = { name: string; count: number };
