@@ -42,7 +42,7 @@ export const VIDEO_CATEGORIES: VideoCategory[] = [
     name: "Coscienza e Spiritualità",
     slug: "coscienza-spiritualita",
     image:
-      "https://images.unsplash.com/photo-1518709594023-6eab9bab7b23?w=1200&auto=format&fit=crop&q=70",
+      "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/ruhw1qgk_image.png",
     description:
       "Che cos'è la coscienza? Da dove nasce il senso di sé? Che rapporto esiste tra il nostro nucleo interiore e le grandi tradizioni spirituali dell'umanità? Questa sezione raccoglie video su coscienza, esperienze mistiche, meditazione contemplativa, dialoghi con maestri e ricercatori spirituali.\n\nUno spazio per ascoltare, riflettere ed espandere il proprio orizzonte interiore.",
     benefits: [
