@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
-import { Muted } from "@/src/ui";
 import { useLang } from "@/src/i18n";
 import {
   MEDITATION_CATEGORIES,
@@ -21,16 +20,20 @@ import {
   MEDITATION_HERO_TITLE,
   MEDITATION_ABOUT_TEXT,
 } from "@/src/meditationCategories";
-import { VIDEO_CATEGORY_NAMES } from "@/src/videoCategories";
+import {
+  VIDEO_CATEGORIES,
+  VIDEO_HERO_IMAGE,
+  VIDEO_HERO_TITLE,
+  VIDEO_ABOUT_TEXT,
+} from "@/src/videoCategories";
 
 type Mode = "meditation" | "video";
 
 export default function Media() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { t, lang } = useLang();
+  const { lang } = useLang();
   const [mode, setMode] = useState<Mode>("meditation");
-  const [videoFilter, setVideoFilter] = useState<string | null>(null);
 
   // Category counts (meditations per category)
   const { data: catData, refetch: refetchCats, isFetching: fetchingCats } = useQuery({
@@ -50,20 +53,23 @@ export default function Media() {
     return m;
   }, [catData]);
 
-  // Video list (only fetched when video mode is active)
-  const { data: videoData, refetch: refetchVideos, isFetching: fetchingVideos } = useQuery({
-    queryKey: ["videos", lang, videoFilter],
+  // Video counts per category (only fetched when video mode is active)
+  const { data: videoCatData, refetch: refetchVideoCats, isFetching: fetchingVideoCats } = useQuery({
+    queryKey: ["video-categories", lang],
     queryFn: () =>
-      api<{ items: any[] }>(
-        videoFilter
-          ? `/media?kind=video&video_category=${encodeURIComponent(videoFilter)}&lang=${lang}`
-          : `/media?kind=video&lang=${lang}`
+      api<{ items: { name: string; slug: string; count: number }[] }>(
+        `/video-categories?lang=${lang}`
       ),
     enabled: mode === "video",
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
+  const videoCounts: Record<string, number> = React.useMemo(() => {
+    const m: Record<string, number> = {};
+    (videoCatData?.items || []).forEach((c) => (m[c.name] = c.count));
+    return m;
+  }, [videoCatData]);
 
   return (
     <ScrollView
@@ -74,8 +80,8 @@ export default function Media() {
       }}
       refreshControl={
         <RefreshControl
-          refreshing={mode === "meditation" ? fetchingCats : fetchingVideos}
-          onRefresh={mode === "meditation" ? refetchCats : refetchVideos}
+          refreshing={mode === "meditation" ? fetchingCats : fetchingVideoCats}
+          onRefresh={mode === "meditation" ? refetchCats : refetchVideoCats}
           tintColor={colors.brandPrimary}
         />
       }
@@ -108,13 +114,7 @@ export default function Media() {
       {mode === "meditation" ? (
         <MeditationContent counts={counts} router={router} />
       ) : (
-        <VideoContent
-          items={videoData?.items || []}
-          router={router}
-          t={t}
-          activeFilter={videoFilter}
-          onSelectFilter={setVideoFilter}
-        />
+        <VideoContent counts={videoCounts} router={router} />
       )}
     </ScrollView>
   );
@@ -181,107 +181,53 @@ function MeditationContent({
 
 /* ─────────── Video content ─────────── */
 function VideoContent({
-  items,
+  counts,
   router,
-  t,
-  activeFilter,
-  onSelectFilter,
 }: {
-  items: any[];
+  counts: Record<string, number>;
   router: ReturnType<typeof useRouter>;
-  t: (k: string) => string;
-  activeFilter: string | null;
-  onSelectFilter: (v: string | null) => void;
 }) {
   return (
-    <View style={{ paddingHorizontal: spacing.xl, marginTop: spacing.md }}>
-      {/* Filter chips */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.xl, marginBottom: spacing.md }}
-      >
-        <Pressable
-          onPress={() => onSelectFilter(null)}
-          style={[styles.filterChip, !activeFilter && styles.filterChipActive]}
-        >
-          <Text style={!activeFilter ? styles.filterChipTxtActive : styles.filterChipTxt}>
-            Tutti
-          </Text>
-        </Pressable>
-        {VIDEO_CATEGORY_NAMES.map((c) => {
-          const selected = activeFilter === c;
-          return (
-            <Pressable
-              key={c}
-              testID={`video-filter-${c}`}
-              onPress={() => onSelectFilter(selected ? null : c)}
-              style={[styles.filterChip, selected && styles.filterChipActive]}
-            >
-              <Text style={selected ? styles.filterChipTxtActive : styles.filterChipTxt}>{c}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {items.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyEmoji}>📺</Text>
-          <Text style={styles.emptyTitle}>
-            {activeFilter ? `Nessun video in "${activeFilter}"` : "Nessun video ancora"}
-          </Text>
-          <Muted style={{ textAlign: "center", marginTop: 6 }}>
-            {activeFilter
-              ? "Prova con un'altra categoria o tocca Tutti per vedere l'archivio completo."
-              : "Sto per pubblicare nuovi contenuti. Torna a trovarci fra qualche giorno."}
-          </Muted>
+    <>
+      {/* Hero image */}
+      <View style={styles.heroWrap}>
+        <Image source={{ uri: VIDEO_HERO_IMAGE }} style={styles.hero} resizeMode="cover" />
+        <View style={styles.heroFade} />
+        <View style={styles.heroTextWrap}>
+          <Text style={styles.heroTitle}>{VIDEO_HERO_TITLE}</Text>
         </View>
-      ) : (
-        items.map((item) => (
-        <Pressable
-          key={item.id}
-          testID={`vid-item-${item.id}`}
-          onPress={() => router.push(`/media/${item.id}` as any)}
-          style={styles.videoRow}
-        >
-          {item.thumbnail_url ? (
-            <Image source={{ uri: item.thumbnail_url }} style={styles.videoThumb} resizeMode="cover" />
-          ) : (
-            <View style={[styles.videoThumb, { alignItems: "center", justifyContent: "center" }]}>
-              <Text style={{ fontSize: 30 }}>📺</Text>
+      </View>
+
+      {/* Category grid */}
+      <Text style={styles.sectionTitle}>Categorie</Text>
+      <View style={styles.grid}>
+        {VIDEO_CATEGORIES.map((cat) => (
+          <Pressable
+            key={cat.slug}
+            testID={`vid-cat-${cat.slug}`}
+            onPress={() => router.push(`/video-category/${cat.slug}` as any)}
+            style={styles.card}
+          >
+            <Image source={{ uri: cat.image }} style={styles.cardImg} resizeMode="cover" />
+            <View style={styles.cardOverlay} />
+            <View style={styles.cardTextWrap}>
+              <Text style={styles.cardTitle} numberOfLines={3}>{cat.name}</Text>
+              <Text style={styles.cardCount}>
+                {counts[cat.name] > 0 ? `${counts[cat.name]} video` : "Nessun video"}
+              </Text>
             </View>
-          )}
-          <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
-            {item.description ? (
-              <Muted style={{ fontSize: 12, marginTop: 4 }} numberOfLines={2}>
-                {item.description}
-              </Muted>
-            ) : null}
-            {Array.isArray(item.video_categories) && item.video_categories.length > 0 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
-                {item.video_categories.slice(0, 2).map((c: string) => (
-                  <View key={c} style={styles.catBadge}>
-                    <Text style={styles.catBadgeTxt}>{c}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            {item.duration_sec ? (
-              <Muted style={{ fontSize: 11, marginTop: 4 }}>
-                {`${Math.round(item.duration_sec / 60)} ${t("minutes")}`}
-              </Muted>
-            ) : null}
-          </View>
-          {item.is_premium ? (
-            <View style={styles.pBadge}>
-              <Text style={styles.pTxt}>PRE</Text>
-            </View>
-          ) : null}
-        </Pressable>
-        ))
-      )}
-    </View>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* About video section */}
+      <View style={styles.aboutBox}>
+        <Text style={styles.aboutTitle}>Cosa sono i Video</Text>
+        {VIDEO_ABOUT_TEXT.split("\n\n").map((p, idx) => (
+          <Text key={idx} style={styles.aboutParagraph}>{p}</Text>
+        ))}
+      </View>
+    </>
   );
 }
 
