@@ -114,7 +114,7 @@ export const VIDEO_CATEGORY_NAMES = VIDEO_CATEGORIES.map((c) => c.name);
 
 // Hero shown on the Video tab overview.
 export const VIDEO_HERO_IMAGE =
-  "https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=1200&auto=format&fit=crop&q=70";
+  "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/xfb711e3_image.png";
 export const VIDEO_HERO_TITLE = "Video informativi";
 
 export const VIDEO_ABOUT_TEXT =
