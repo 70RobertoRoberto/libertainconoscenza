@@ -56,7 +56,7 @@ export const VIDEO_CATEGORIES: VideoCategory[] = [
     name: "Medicina Complementare",
     slug: "medicina-complementare",
     image:
-      "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=1200&auto=format&fit=crop&q=70",
+      "https://customer-assets-0z36b82j.emergentagent.net/job_integral-wellness-2/artifacts/k1g7tz1v_image.png",
     description:
       "La medicina complementare integra la medicina convenzionale con approcci naturali, energetici e informazionali. In questa sezione presentiamo video su omeopatia, agopuntura, medicina antroposofica, medicina integrata informazionale, biofisica applicata e ricerca clinica di frontiera.\n\nContenuti pensati per pazienti curiosi, operatori del benessere e professionisti sanitari che desiderano ampliare la propria visione.",
     benefits: [
