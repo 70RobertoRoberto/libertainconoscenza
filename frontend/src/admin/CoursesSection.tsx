@@ -295,7 +295,15 @@ function CreateCourseForm({ onCreated }: { onCreated: (id: string) => void }) {
             keyboardType="decimal-pad"
           />
         </>
-      ) : null}
+      ) : (
+        <View style={s.freeBox}>
+          <Text style={s.freeTitle}>💚  Corso Base — GRATUITO</Text>
+          <Text style={s.freeBody}>
+            Incluso nell&apos;abbonamento annuale. Questo testo verrà mostrato automaticamente
+            agli utenti al posto del prezzo.
+          </Text>
+        </View>
+      )}
 
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md }}>
         <Text style={s.label}>Area tematica (opzionale)</Text>
@@ -365,7 +373,7 @@ function CourseList({ active, onOpen }: { active: boolean; onOpen: (id: string) 
               <Text style={s.cardTitle} numberOfLines={2}>{c.title}</Text>
             </View>
             <Text style={s.cardMeta}>
-              {c.kind === "premium" ? `Premium · ${c.price.toFixed(2)} €` : "Base"}
+              {c.kind === "premium" ? `Premium · ${c.price.toFixed(2)} €` : "Base · Gratuito (incluso nell'abbonamento)"}
               {c.area_name ? ` · ${c.area_name}` : ""}
               {` · ${c.topic_count} argomenti`}
               {c.has_quiz ? " · Quiz" : ""}
@@ -493,7 +501,7 @@ function CourseEditorModal({ courseId, onClose }: { courseId: string; onClose: (
             <Text style={s.h1}>{course.title}</Text>
           </View>
           <Text style={s.cardMeta}>
-            {course.kind === "premium" ? `Premium · ${course.price.toFixed(2)} €` : "Base"}
+            {course.kind === "premium" ? `Premium · ${course.price.toFixed(2)} €` : "Base · Gratuito (incluso nell'abbonamento)"}
             {course.area_name ? ` · ${course.area_name}` : ""}
             {course.is_active ? " · Attivo" : " · Bozza"}
           </Text>
@@ -762,7 +770,15 @@ function CourseSettingsEditor({
                 keyboardType="decimal-pad"
               />
             </>
-          ) : null}
+          ) : (
+            <View style={s.freeBox}>
+              <Text style={s.freeTitle}>💚  Corso Base — GRATUITO</Text>
+              <Text style={s.freeBody}>
+                Incluso nell&apos;abbonamento annuale. Questo testo verrà mostrato automaticamente
+                agli utenti al posto del prezzo.
+              </Text>
+            </View>
+          )}
 
           <Text style={s.label}>Area tematica (opzionale)</Text>
           <View style={s.chipRow}>
@@ -1044,6 +1060,9 @@ const s = StyleSheet.create({
   radioActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
   radioTxt: { color: colors.onSurfaceSecondary, fontWeight: "600" },
   radioTxtActive: { color: colors.brandPrimary },
+  freeBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderLeftWidth: 3, borderLeftColor: colors.brandPrimary, marginBottom: spacing.md },
+  freeTitle: { color: colors.onBrandTertiary, fontWeight: "800", fontSize: 14 },
+  freeBody: { color: colors.onBrandTertiary, fontSize: 13, lineHeight: 19, marginTop: 4, opacity: 0.9 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
   aChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   aChipActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandPrimary },
