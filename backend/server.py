@@ -1187,6 +1187,29 @@ class SetEmailIn(BaseModel):
     email: str
 
 
+class SetNameIn(BaseModel):
+    first_name: str
+    last_name: str
+
+
+@api.post("/me/name")
+async def set_my_name(inp: SetNameIn, user: dict = Depends(current_user)):
+    first = (inp.first_name or "").strip()
+    last = (inp.last_name or "").strip()
+    if len(first) < 2:
+        raise HTTPException(400, "Nome troppo corto (min 2 caratteri)")
+    if len(last) < 2:
+        raise HTTPException(400, "Cognome troppo corto (min 2 caratteri)")
+    if len(first) > 80 or len(last) > 80:
+        raise HTTPException(400, "Nome o cognome troppo lunghi")
+    full = f"{first} {last}"
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"first_name": first, "last_name": last, "name": full}},
+    )
+    return {"ok": True, "name": full, "first_name": first, "last_name": last}
+
+
 @api.post("/me/email")
 async def set_my_email(inp: SetEmailIn, user: dict = Depends(current_user)):
     e = (inp.email or "").strip().lower()

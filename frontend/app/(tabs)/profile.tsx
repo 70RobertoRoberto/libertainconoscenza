@@ -107,7 +107,15 @@ export default function Profile() {
     >
       <View style={{ alignItems: "center", marginBottom: spacing.xl }}>
         <Image source={{ uri: LOGO_URL }} style={{ width: 90, height: 90 }} resizeMode="contain" />
-        <Text style={styles.name}>{user?.name || t("seeker")}</Text>
+        <Pressable
+          testID="edit-name"
+          onPress={() => router.push("/edit-name")}
+          hitSlop={8}
+          style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: spacing.md }}
+        >
+          <Text style={styles.name}>{user?.name || t("seeker")}</Text>
+          <Text style={{ color: colors.brandPrimary, fontSize: 14 }}>✎</Text>
+        </Pressable>
         <Muted style={{ marginTop: 4 }}>{user?.phone}</Muted>
         <View style={{ marginTop: spacing.md, flexDirection: "row", gap: spacing.sm }}>
           {isPremium ? (
