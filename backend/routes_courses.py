@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel, Field
@@ -100,6 +100,10 @@ class CourseTopicIn(BaseModel):
 
 class ReorderIn(BaseModel):
     topic_ids: List[str]
+
+
+class AttemptIn(BaseModel):
+    answers: Dict[str, int]  # {question_id: answer_index}
 
 
 # ---------------------------------------------------------------------------
@@ -559,9 +563,6 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "passed": bool(enrollment.get("quiz_passed")),
             "certificate_id": enrollment.get("certificate_id"),
         }
-
-    class AttemptIn(BaseModel):
-        answers: dict  # {question_id: answer_index}
 
     @router.post("/courses/{course_id}/quiz-view/attempt", dependencies=[Depends(current_user)])
     async def user_quiz_attempt(course_id: str, inp: AttemptIn, user: dict = Depends(current_user)):

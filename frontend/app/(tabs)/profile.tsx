@@ -15,11 +15,15 @@ export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [ref, setRef] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
+  const [enrollCount, setEnrollCount] = useState<number>(0);
+  const [certCount, setCertCount] = useState<number>(0);
 
   useEffect(() => {
     auth.me().then(setUser).catch(() => {});
     api<any>("/referrals/me").then(setRef).catch(() => {});
     api<any>("/me/stats").then(setStats).catch(() => {});
+    api<any>("/me/enrollments").then((r) => setEnrollCount(r?.items?.length || 0)).catch(() => {});
+    api<any>("/me/certificates").then((r) => setCertCount(r?.items?.length || 0)).catch(() => {});
   }, []);
 
   const isPremium = user?.subscription?.status === "premium";
@@ -100,6 +104,22 @@ export default function Profile() {
         <Text style={styles.sectionTitle}>♥  {t("favorites")}</Text>
         <View style={{ height: spacing.md }} />
         <OutlineButton testID="go-favorites" label={t("favorites_see")} onPress={() => router.push("/favorites")} />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>🎓  I miei Corsi</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-my-courses"
+          label={`Corsi seguiti${enrollCount ? ` (${enrollCount})` : ""}`}
+          onPress={() => router.push("/my-courses")}
+        />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="go-my-certificates"
+          label={`Certificati${certCount ? ` (${certCount})` : ""}`}
+          onPress={() => router.push("/my-certificates")}
+        />
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
