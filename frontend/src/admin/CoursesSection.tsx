@@ -453,6 +453,7 @@ function CourseEditorModal({ courseId, onClose }: { courseId: string; onClose: (
   const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [quizOpen, setQuizOpen] = useState(false);
   const [promoOpen, setPromoOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   if (!course) return null;
   const topics = topicsData?.items || [];
@@ -496,6 +497,23 @@ function CourseEditorModal({ courseId, onClose }: { courseId: string; onClose: (
             {course.area_name ? ` · ${course.area_name}` : ""}
             {course.is_active ? " · Attivo" : " · Bozza"}
           </Text>
+
+          <Pressable onPress={() => setSettingsOpen(true)} style={[s.primaryBtnSm2, { marginTop: spacing.md, alignSelf: "flex-start" }]}>
+            <Text style={s.primaryTxt}>⚙  Impostazioni corso (titolo · copertina · descrizione · prezzo)</Text>
+          </Pressable>
+
+          {course.description_html ? (
+            <View style={[s.previewBox, { marginTop: spacing.md }]}>
+              <Text style={s.previewLabel}>Descrizione:</Text>
+              <View style={{ height: 180 }}>
+                <RichViewer html={course.description_html} />
+              </View>
+            </View>
+          ) : (
+            <Text style={[s.empty, { textAlign: "left", padding: 8 }]}>
+              Nessuna descrizione. Aprila da &quot;Impostazioni corso&quot;.
+            </Text>
+          )}
 
           {/* Topics */}
           <View style={s.section}>
@@ -569,6 +587,195 @@ function CourseEditorModal({ courseId, onClose }: { courseId: string; onClose: (
             onSaved={() => { setPromoOpen(false); invalidate(); }}
           />
         ) : null}
+        {settingsOpen ? (
+          <CourseSettingsEditor
+            course={course}
+            onClose={() => setSettingsOpen(false)}
+            onSaved={() => { setSettingsOpen(false); invalidate(); }}
+          />
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+/* ─────────── Course settings editor (title/cover/description/kind/price/area) ─────────── */
+function CourseSettingsEditor({
+  course, onClose, onSaved,
+}: { course: Course; onClose: () => void; onSaved: () => void }) {
+  const { data: areasData } = useQuery({
+    queryKey: ["c-areas"],
+    queryFn: () => api<{ items: Area[] }>("/admin/course-areas"),
+  });
+  const areas = areasData?.items || [];
+
+  const [title, setTitle] = useState(course.title);
+  const [coverUrl, setCoverUrl] = useState(course.cover_url);
+  const [descHtml, setDescHtml] = useState(course.description_html);
+  const [descEditor, setDescEditor] = useState(false);
+  const [kind, setKind] = useState<"base" | "premium">(course.kind);
+  const [price, setPrice] = useState(course.price ? String(course.price) : "");
+  const [areaId, setAreaId] = useState<string | null>(course.area_id ?? null);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  const pickCover = async () => {
+    if (Platform.OS !== "web") {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { toast("Permesso negato"); return; }
+    }
+    const r = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+    });
+    if (r.canceled || !r.assets?.[0]) return;
+    const asset = r.assets[0];
+    setUploading(true);
+    try {
+      if (Platform.OS !== "web") {
+        try {
+          const info = await FileSystem.getInfoAsync(asset.uri);
+          if (info.exists && (info.size || 0) > 8 * 1024 * 1024) {
+            toast("Immagine troppo grande", "Massimo 8 MB.");
+            return;
+          }
+        } catch { /* skip */ }
+      }
+      const up = await adminUpload(
+        asset.uri,
+        asset.mimeType || "image/jpeg",
+        asset.fileName || "cover.jpg",
+      );
+      setCoverUrl(up.url);
+    } catch (e: any) {
+      toast("Errore upload", String(e?.message || e));
+    } finally { setUploading(false); }
+  };
+
+  const save = async () => {
+    if (!title.trim()) return toast("Titolo obbligatorio");
+    if (!coverUrl) return toast("Copertina obbligatoria");
+    if (kind === "premium" && (!price || Number(price) <= 0)) return toast("Prezzo obbligatorio per corsi Premium");
+    setSaving(true);
+    try {
+      await api(`/admin/courses/${course.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          title: title.trim(),
+          cover_url: coverUrl,
+          description_html: descHtml,
+          kind,
+          price: kind === "premium" ? Number(price) : 0,
+          area_id: areaId,
+        }),
+      });
+      onSaved();
+    } catch (e: any) {
+      toast("Errore", e?.message || "-");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+        <View style={s.editorHeader}>
+          <Pressable onPress={onClose}><Text style={s.headerBtn}>Annulla</Text></Pressable>
+          <Text style={s.headerTitle} numberOfLines={1}>Impostazioni corso</Text>
+          <Pressable onPress={save} disabled={saving}>
+            <Text style={[s.headerBtn, { fontWeight: "800" }]}>{saving ? "…" : "Salva"}</Text>
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 80 }}>
+          <Text style={s.label}>Titolo *</Text>
+          <TextInput style={s.input} value={title} onChangeText={setTitle} placeholderTextColor={colors.muted} />
+
+          <Text style={s.label}>Immagine di copertina *</Text>
+          {coverUrl ? (
+            <View style={{ marginBottom: spacing.md }}>
+              <Image source={{ uri: coverUrl }} style={s.cover} />
+              <View style={s.coverBadge}>
+                <Text style={s.coverBadgeTxt}>✓ Immagine attuale</Text>
+              </View>
+              <Pressable onPress={pickCover} style={s.coverReplace} disabled={uploading}>
+                {uploading ? (
+                  <ActivityIndicator color={colors.brandPrimary} />
+                ) : (
+                  <Text style={s.uploadTxt}>Sostituisci copertina</Text>
+                )}
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={pickCover} style={s.upload} disabled={uploading}>
+              {uploading ? (
+                <View style={{ alignItems: "center" }}>
+                  <ActivityIndicator color={colors.brandPrimary} />
+                  <Text style={[s.uploadTxt, { marginTop: 6 }]}>Caricamento in corso…</Text>
+                </View>
+              ) : (
+                <Text style={s.uploadTxt}>📷  Scegli copertina</Text>
+              )}
+            </Pressable>
+          )}
+
+          <Text style={s.label}>Descrizione (WYSIWYG)</Text>
+          <Pressable onPress={() => setDescEditor(true)} style={s.editorLauncher}>
+            <Text style={{ color: descHtml ? colors.onSurface : colors.muted, fontSize: 14 }}>
+              {descHtml ? "✎  Modifica descrizione" : "✎  Apri editor…"}
+            </Text>
+          </Pressable>
+          {descHtml ? (
+            <View style={s.previewBox}>
+              <Text style={s.previewLabel}>Anteprima:</Text>
+              <View style={{ height: 160 }}>
+                <RichViewer html={descHtml} />
+              </View>
+            </View>
+          ) : null}
+          <RichEditor
+            visible={descEditor}
+            initialHtml={descHtml}
+            onSave={(h) => { setDescHtml(h); setDescEditor(false); }}
+            onClose={() => setDescEditor(false)}
+            title="Descrizione corso"
+          />
+
+          <Text style={s.label}>Tipo *</Text>
+          <View style={s.rowRadio}>
+            {(["base", "premium"] as const).map((k) => (
+              <Pressable key={k} onPress={() => setKind(k)} style={[s.radio, kind === k && s.radioActive]}>
+                <Text style={[s.radioTxt, kind === k && s.radioTxtActive]}>
+                  {k === "premium" ? "👑 Premium" : "Base"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {kind === "premium" ? (
+            <>
+              <Text style={s.label}>Costo (€) — una tantum *</Text>
+              <TextInput
+                style={s.input}
+                value={price}
+                onChangeText={(t) => setPrice(t.replace(",", ".").replace(/[^0-9.]/g, ""))}
+                placeholder="es. 29"
+                placeholderTextColor={colors.muted}
+                keyboardType="decimal-pad"
+              />
+            </>
+          ) : null}
+
+          <Text style={s.label}>Area tematica (opzionale)</Text>
+          <View style={s.chipRow}>
+            <Pressable onPress={() => setAreaId(null)} style={[s.aChip, !areaId && s.aChipActive]}>
+              <Text style={[s.aChipTxt, !areaId && s.aChipTxtActive]}>Nessuna</Text>
+            </Pressable>
+            {areas.map((a) => (
+              <Pressable key={a.id} onPress={() => setAreaId(a.id)} style={[s.aChip, areaId === a.id && s.aChipActive]}>
+                <Text style={[s.aChipTxt, areaId === a.id && s.aChipTxtActive]}>{a.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
       </View>
     </Modal>
   );
