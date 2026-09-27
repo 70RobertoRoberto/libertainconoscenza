@@ -467,4 +467,232 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
         out.sort(key=lambda c: (0 if c.get("promo", {}).get("active") else 1))
         return {"items": out}
 
+    @router.get("/courses/upcoming", dependencies=[Depends(current_user)])
+    async def user_upcoming_courses():
+        """Bozze (in preparazione) shown as 'Prossimi arrivi' teaser."""
+        docs = await db.courses.find({"is_active": False}).sort("created_at", -1).limit(6).to_list(6)
+        area_map = {a["id"]: a["name"] async for a in db.course_areas.find({})}
+        return {"items": [_course_out(d, area_map.get(d.get("area_id")), 0, False) for d in docs]}
+
+    @router.get("/courses/{course_id}", dependencies=[Depends(current_user)])
+    async def user_get_course(course_id: str, user: dict = Depends(current_user)):
+        doc = await db.courses.find_one({"id": course_id})
+        if not doc or not doc.get("is_active"):
+            raise HTTPException(404, "Corso non disponibile")
+        area_name = None
+        if doc.get("area_id"):
+            a = await db.course_areas.find_one({"id": doc["area_id"]})
+            area_name = a["name"] if a else None
+        topics = await db.course_topics.find({"course_id": course_id}).sort("order", 1).to_list(500)
+        qz = await db.course_quizzes.find_one({"course_id": course_id})
+        # Enrollment check
+        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        return {
+            "course": _course_out(doc, area_name, len(topics), bool(qz)),
+            "topics_summary": [
+                {"id": t["id"], "title": t["title"], "kind": t.get("kind", "modulo"), "order": t.get("order", 0)}
+                for t in topics
+            ],
+            "enrolled": bool(enrollment),
+            "enrollment": enrollment and {
+                "started_at": enrollment.get("started_at"),
+                "quiz_passed": bool(enrollment.get("quiz_passed")),
+                "quiz_attempts": int(enrollment.get("quiz_attempts", 0)),
+                "certificate_id": enrollment.get("certificate_id"),
+            },
+        }
+
+    @router.post("/courses/{course_id}/enroll", dependencies=[Depends(current_user)])
+    async def user_enroll(course_id: str, user: dict = Depends(current_user)):
+        doc = await db.courses.find_one({"id": course_id, "is_active": True})
+        if not doc:
+            raise HTTPException(404, "Corso non disponibile")
+        if doc.get("kind") == "premium":
+            # Premium: purchase flow — not implemented yet.
+            raise HTTPException(402, "I corsi Premium richiedono l'acquisto (pagamenti in attivazione).")
+        existing = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        if existing:
+            return {"ok": True, "already": True}
+        await db.course_enrollments.insert_one({
+            "id": str(uuid.uuid4()),
+            "course_id": course_id,
+            "user_id": user["id"],
+            "started_at": _now(),
+            "quiz_passed": False,
+            "quiz_attempts": 0,
+            "certificate_id": None,
+        })
+        return {"ok": True, "already": False}
+
+    @router.get("/courses/{course_id}/topics/{topic_id}", dependencies=[Depends(current_user)])
+    async def user_get_topic(course_id: str, topic_id: str, user: dict = Depends(current_user)):
+        # Must be enrolled to read topic content.
+        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        if not enrollment:
+            raise HTTPException(403, "Devi iscriverti al corso per accedere agli argomenti")
+        doc = await db.course_topics.find_one({"id": topic_id, "course_id": course_id})
+        if not doc:
+            raise HTTPException(404, "Argomento non trovato")
+        return _topic_out(doc)
+
+    @router.get("/courses/{course_id}/quiz-view", dependencies=[Depends(current_user)])
+    async def user_get_quiz(course_id: str, user: dict = Depends(current_user)):
+        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        if not enrollment:
+            raise HTTPException(403, "Devi iscriverti al corso per fare il quiz")
+        doc = await db.course_quizzes.find_one({"course_id": course_id})
+        if not doc:
+            raise HTTPException(404, "Quiz non disponibile")
+        # Strip is_correct + explanation from public payload
+        questions = []
+        for q in doc.get("questions", []):
+            questions.append({
+                "id": q["id"],
+                "text": q["text"],
+                "answers": [{"text": a["text"]} for a in q.get("answers", [])],
+            })
+        return {
+            "questions": questions,
+            "pass_threshold": doc.get("pass_threshold", 0.7),
+            "max_attempts": doc.get("max_attempts", 3),
+            "attempts_used": int(enrollment.get("quiz_attempts", 0)),
+            "passed": bool(enrollment.get("quiz_passed")),
+            "certificate_id": enrollment.get("certificate_id"),
+        }
+
+    class AttemptIn(BaseModel):
+        answers: dict  # {question_id: answer_index}
+
+    @router.post("/courses/{course_id}/quiz-view/attempt", dependencies=[Depends(current_user)])
+    async def user_quiz_attempt(course_id: str, inp: AttemptIn, user: dict = Depends(current_user)):
+        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        if not enrollment:
+            raise HTTPException(403, "Non iscritto al corso")
+        if enrollment.get("quiz_passed"):
+            raise HTTPException(400, "Quiz già superato")
+        quiz = await db.course_quizzes.find_one({"course_id": course_id})
+        if not quiz:
+            raise HTTPException(404, "Quiz non disponibile")
+        used = int(enrollment.get("quiz_attempts", 0))
+        max_attempts = int(quiz.get("max_attempts", 3))
+        if used >= max_attempts:
+            raise HTTPException(400, f"Tentativi esauriti ({used}/{max_attempts})")
+
+        # Evaluate
+        correct_count = 0
+        total = 0
+        per_question = []
+        for q in quiz.get("questions", []):
+            total += 1
+            answers = q.get("answers", [])
+            correct_idx = next((i for i, a in enumerate(answers) if a.get("is_correct")), -1)
+            user_idx = inp.answers.get(q["id"], -1)
+            try:
+                user_idx = int(user_idx)
+            except Exception:
+                user_idx = -1
+            is_ok = user_idx == correct_idx and correct_idx >= 0
+            if is_ok:
+                correct_count += 1
+            per_question.append({
+                "question_id": q["id"],
+                "correct_index": correct_idx,
+                "user_index": user_idx,
+                "is_correct": is_ok,
+                "explanation": q.get("explanation", ""),
+            })
+        score = (correct_count / total) if total > 0 else 0
+        threshold = float(quiz.get("pass_threshold", 0.7))
+        passed = score >= threshold
+
+        attempt_id = str(uuid.uuid4())
+        await db.quiz_attempts.insert_one({
+            "id": attempt_id,
+            "course_id": course_id,
+            "user_id": user["id"],
+            "score": score,
+            "passed": passed,
+            "answers": inp.answers,
+            "attempted_at": _now(),
+        })
+        update = {"quiz_attempts": used + 1}
+        certificate_id = enrollment.get("certificate_id")
+        if passed:
+            certificate_id = certificate_id or str(uuid.uuid4())
+            await db.certificates.insert_one({
+                "id": certificate_id,
+                "user_id": user["id"],
+                "course_id": course_id,
+                "course_title": (await db.courses.find_one({"id": course_id}) or {}).get("title", "Corso"),
+                "issued_at": _now(),
+                "score": score,
+            })
+            update["quiz_passed"] = True
+            update["certificate_id"] = certificate_id
+        await db.course_enrollments.update_one(
+            {"course_id": course_id, "user_id": user["id"]},
+            {"$set": update},
+        )
+        return {
+            "score": score,
+            "passed": passed,
+            "attempts_used": used + 1,
+            "max_attempts": max_attempts,
+            "per_question": per_question,
+            "certificate_id": certificate_id if passed else None,
+        }
+
+    @router.get("/me/enrollments", dependencies=[Depends(current_user)])
+    async def me_enrollments(user: dict = Depends(current_user)):
+        rows = await db.course_enrollments.find({"user_id": user["id"]}).to_list(500)
+        out = []
+        for r in rows:
+            c = await db.courses.find_one({"id": r["course_id"]})
+            if not c:
+                continue
+            out.append({
+                "course": {
+                    "id": c["id"],
+                    "title": c.get("title"),
+                    "cover_url": c.get("cover_url"),
+                    "kind": c.get("kind"),
+                },
+                "started_at": r.get("started_at"),
+                "quiz_passed": bool(r.get("quiz_passed")),
+                "certificate_id": r.get("certificate_id"),
+            })
+        out.sort(key=lambda x: x["started_at"] or "", reverse=True)
+        return {"items": out}
+
+    @router.get("/me/certificates", dependencies=[Depends(current_user)])
+    async def me_certificates(user: dict = Depends(current_user)):
+        rows = await db.certificates.find({"user_id": user["id"]}).sort("issued_at", -1).to_list(200)
+        return {
+            "items": [
+                {
+                    "id": r["id"],
+                    "course_id": r["course_id"],
+                    "course_title": r.get("course_title", "Corso"),
+                    "issued_at": r.get("issued_at"),
+                    "score": r.get("score", 0),
+                }
+                for r in rows
+            ]
+        }
+
+    @router.get("/certificates/{cert_id}", dependencies=[Depends(current_user)])
+    async def get_certificate(cert_id: str, user: dict = Depends(current_user)):
+        r = await db.certificates.find_one({"id": cert_id, "user_id": user["id"]})
+        if not r:
+            raise HTTPException(404, "Certificato non trovato")
+        u = await db.users.find_one({"id": user["id"]}) or {}
+        display_name = u.get("name") or u.get("phone") or "Utente"
+        return {
+            "id": r["id"],
+            "user_name": display_name,
+            "course_title": r.get("course_title", "Corso"),
+            "issued_at": r.get("issued_at"),
+            "score": r.get("score", 0),
+        }
+
     return router
