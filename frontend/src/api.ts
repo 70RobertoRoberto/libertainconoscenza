@@ -48,7 +48,15 @@ export async function api<T = any>(
     data = text;
   }
   if (!res.ok) {
-    const msg = (data && (data.detail || data.message)) || `Errore ${res.status}`;
+    let msg: string;
+    if (data && Array.isArray(data.detail)) {
+      // FastAPI validation errors: array of {loc, msg, type}
+      msg = data.detail
+        .map((e: any) => (e.loc ? `${e.loc.slice(-1)[0]}: ${e.msg}` : e.msg))
+        .join(" · ");
+    } else {
+      msg = (data && (data.detail || data.message)) || `Errore ${res.status}`;
+    }
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
   return data as T;

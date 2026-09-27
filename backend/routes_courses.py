@@ -71,7 +71,7 @@ class CoursePromo(BaseModel):
 class CourseIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     cover_url: str
-    description_html: str = Field(default="", max_length=200_000)
+    description_html: str = Field(default="", max_length=10_000_000)
     kind: str = "base"  # base | premium
     price: float = 0.0
     area_id: Optional[str] = None
@@ -81,7 +81,7 @@ class CourseIn(BaseModel):
 class CoursePatch(BaseModel):
     title: Optional[str] = None
     cover_url: Optional[str] = None
-    description_html: Optional[str] = None
+    description_html: Optional[str] = Field(default=None, max_length=10_000_000)
     kind: Optional[str] = None
     price: Optional[float] = None
     area_id: Optional[str] = None
@@ -92,7 +92,7 @@ class CoursePatch(BaseModel):
 class CourseTopicIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     kind: str = Field(default="modulo", max_length=32)
-    content_html: str = Field(default="", max_length=200_000)
+    content_html: str = Field(default="", max_length=5_000_000)
     order: int = 0
     linked_meditation_id: Optional[str] = None
     external_article_url: Optional[str] = None
