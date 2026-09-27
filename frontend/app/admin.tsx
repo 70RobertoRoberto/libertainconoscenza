@@ -1412,10 +1412,17 @@ function CouponsSection() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["admin-coupons"], queryFn: () => api<any>("/admin/coupons") });
+  const { data: coursesData } = useQuery({
+    queryKey: ["admin-coupons-courses"],
+    queryFn: () => api<{ items: { id: string; title: string; kind: string }[] }>("/admin/courses?status=all"),
+  });
+  const coursesForCoupon = (coursesData?.items || []).filter((c: any) => c.kind === "premium");
   const [code, setCode] = useState("");
   const [percent, setPercent] = useState("20");
   const [maxUses, setMaxUses] = useState("100");
   const [expires, setExpires] = useState("");
+  const [scope, setScope] = useState<"any" | "plan" | "course">("any");
+  const [courseId, setCourseId] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1423,6 +1430,7 @@ function CouponsSection() {
     setLoading(true); setMsg("");
     try {
       if (!code) throw new Error("Codice richiesto");
+      if (scope === "course" && !courseId) throw new Error("Seleziona il corso a cui applicare il codice");
       await api("/admin/coupons", {
         method: "POST",
         body: JSON.stringify({
@@ -1430,9 +1438,12 @@ function CouponsSection() {
           percent_off: parseInt(percent) || 10,
           max_uses: parseInt(maxUses) || 100,
           expires_at: expires || null,
+          scope,
+          course_id: scope === "course" ? courseId : null,
         }),
       });
       setCode(""); setPercent("20"); setMaxUses("100"); setExpires("");
+      setScope("any"); setCourseId(null);
       qc.invalidateQueries({ queryKey: ["admin-coupons"] });
       setMsg("Codice creato");
     } catch (e: any) { setMsg(e.message); }
@@ -1449,12 +1460,73 @@ function CouponsSection() {
       <Card>
         <Text style={{ color: colors.onSurface, fontSize: 16, fontWeight: "700" }}>Nuovo codice sconto</Text>
         <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.md }}>
-          Gli utenti applicheranno il codice al checkout dell'abbonamento.
+          Crea codici promo per l&apos;abbonamento annuale, per un corso Premium specifico, o validi ovunque.
         </Muted>
         <TextInput testID="coupon-code" value={code} onChangeText={setCode} placeholder="LANCIO2026" placeholderTextColor={colors.muted} autoCapitalize="characters" style={styles.input} />
         <TextInput testID="coupon-percent" value={percent} onChangeText={setPercent} placeholder="% di sconto (1-100)" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
         <TextInput testID="coupon-max" value={maxUses} onChangeText={setMaxUses} placeholder="Numero massimo di usi" placeholderTextColor={colors.muted} keyboardType="numeric" style={[styles.input, { marginTop: spacing.md }]} />
         <TextInput value={expires} onChangeText={setExpires} placeholder="Scadenza YYYY-MM-DD (facoltativo)" placeholderTextColor={colors.muted} autoCapitalize="none" style={[styles.input, { marginTop: spacing.md }]} />
+
+        <Text style={{ color: colors.onSurfaceTertiary, marginTop: spacing.md, marginBottom: 6, fontSize: 12, fontWeight: "700" }}>Ambito di applicazione</Text>
+        <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          {[
+            { key: "any", label: "Ovunque" },
+            { key: "plan", label: "Solo abbonamento" },
+            { key: "course", label: "Solo un corso" },
+          ].map((o) => {
+            const active = scope === (o.key as any);
+            return (
+              <Pressable
+                key={o.key}
+                testID={`coupon-scope-${o.key}`}
+                onPress={() => { setScope(o.key as any); if (o.key !== "course") setCourseId(null); }}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: radius.pill,
+                  borderWidth: 1,
+                  borderColor: active ? colors.brandPrimary : colors.border,
+                  backgroundColor: active ? colors.brandTertiary : colors.surfaceSecondary,
+                }}
+              >
+                <Text style={{ color: active ? colors.brandPrimary : colors.onSurfaceTertiary, fontWeight: "700", fontSize: 12 }}>{o.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {scope === "course" ? (
+          <View style={{ marginTop: spacing.md }}>
+            <Text style={{ color: colors.onSurfaceTertiary, marginBottom: 6, fontSize: 12, fontWeight: "700" }}>Seleziona corso Premium</Text>
+            {coursesForCoupon.length === 0 ? (
+              <Muted style={{ fontSize: 12 }}>Nessun corso Premium ancora. Crea prima un corso Premium.</Muted>
+            ) : (
+              <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                {coursesForCoupon.map((c: any) => {
+                  const active = courseId === c.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => setCourseId(c.id)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: radius.pill,
+                        borderWidth: 1,
+                        borderColor: active ? colors.brandPrimary : colors.border,
+                        backgroundColor: active ? colors.brandTertiary : colors.surfaceSecondary,
+                        maxWidth: "100%",
+                      }}
+                    >
+                      <Text style={{ color: active ? colors.brandPrimary : colors.onSurfaceTertiary, fontSize: 12 }} numberOfLines={1}>👑 {c.title}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ) : null}
+
         {msg ? <Text style={{ color: colors.brandPrimary, marginTop: spacing.sm }}>{msg}</Text> : null}
         <GoldButton testID="save-coupon" label="Crea codice" onPress={create} loading={loading} style={{ marginTop: spacing.md }} />
       </Card>
@@ -1466,7 +1538,8 @@ function CouponsSection() {
           <View style={{ flex: 1 }}>
             <Text style={styles.itemTitle}>{c.code} · -{c.percent_off}%</Text>
             <Muted style={{ fontSize: 11 }}>
-              Usato {c.used_count}/{c.max_uses}{c.expires_at ? ` · scade ${c.expires_at}` : ""}
+              {c.scope === "course" ? "🎓 Solo corso" : c.scope === "plan" ? "💳 Solo abbonamento" : "🌐 Ovunque"}
+              {" · "}Usato {c.used_count}/{c.max_uses}{c.expires_at ? ` · scade ${c.expires_at}` : ""}
             </Muted>
           </View>
           <Pressable onPress={() => remove(c.code)}>

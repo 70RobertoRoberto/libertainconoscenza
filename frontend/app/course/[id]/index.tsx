@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Image, Pressable,
+  View, Text, StyleSheet, ScrollView, Image, Pressable, TextInput,
   ActivityIndicator, RefreshControl, Alert, Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -55,6 +55,29 @@ export default function CourseDetailScreen() {
     refetchOnMount: "always",
   });
 
+  const [coupon, setCoupon] = useState("");
+  const [couponInfo, setCouponInfo] = useState<{ code: string; percent_off: number } | null>(null);
+  const [couponErr, setCouponErr] = useState("");
+  const [applying, setApplying] = useState(false);
+
+  const applyCoupon = async () => {
+    setCouponErr("");
+    if (!coupon.trim()) return;
+    setApplying(true);
+    try {
+      const r = await api<any>("/coupons/validate", {
+        method: "POST",
+        body: JSON.stringify({ code: coupon.trim(), course_id: id }),
+      });
+      setCouponInfo({ code: r.code, percent_off: r.percent_off });
+    } catch (e: any) {
+      setCouponInfo(null);
+      setCouponErr(e?.message || "Codice non valido");
+    } finally {
+      setApplying(false);
+    }
+  };
+
   const enroll = async () => {
     try {
       await api(`/courses/${id}/enroll`, { method: "POST" });
@@ -76,9 +99,13 @@ export default function CourseDetailScreen() {
   const { course, topics_summary, enrolled, enrollment } = data;
   const isPremium = course.kind === "premium";
   const isPromo = course.promo?.active;
-  const showPrice = isPromo && typeof course.promo?.price_promo === "number"
-    ? course.promo.price_promo!.toFixed(2)
-    : course.price.toFixed(2);
+  const basePrice = isPromo && typeof course.promo?.price_promo === "number"
+    ? course.promo.price_promo!
+    : course.price;
+  const discountedPrice = couponInfo
+    ? Math.round(basePrice * (100 - couponInfo.percent_off) / 100 * 100) / 100
+    : basePrice;
+  const showPrice = discountedPrice.toFixed(2);
 
   return (
     <ScrollView
@@ -153,6 +180,39 @@ export default function CourseDetailScreen() {
 
       {/* Sticky CTA */}
       <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
+        {!enrolled && isPremium ? (
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginBottom: 6 }}>
+              Hai un codice sconto?
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TextInput
+                testID="course-coupon-input"
+                value={coupon}
+                onChangeText={setCoupon}
+                placeholder="CODICE"
+                placeholderTextColor={colors.muted}
+                autoCapitalize="characters"
+                style={styles.couponInput}
+              />
+              <Pressable
+                testID="course-coupon-apply"
+                onPress={applyCoupon}
+                disabled={applying}
+                style={styles.couponBtn}
+              >
+                <Text style={styles.couponBtnTxt}>{applying ? "…" : "Applica"}</Text>
+              </Pressable>
+            </View>
+            {couponInfo ? (
+              <Text style={{ color: colors.brandPrimary, marginTop: 6, fontSize: 12 }}>
+                ✓ Codice {couponInfo.code} applicato: -{couponInfo.percent_off}%
+              </Text>
+            ) : couponErr ? (
+              <Text style={{ color: colors.error, marginTop: 6, fontSize: 12 }}>{couponErr}</Text>
+            ) : null}
+          </View>
+        ) : null}
         {enrolled ? (
           <>
             {enrollment?.quiz_passed ? (
@@ -241,4 +301,25 @@ const styles = StyleSheet.create({
   },
   ctaPremium: {},
   ctaTxt: { color: colors.onBrandPrimary, fontWeight: "800", fontSize: 15 },
+  couponInput: {
+    flex: 1,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.onSurface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    fontSize: 14,
+  },
+  couponBtn: {
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  couponBtnTxt: { color: colors.brandPrimary, fontWeight: "700", fontSize: 13 },
 });

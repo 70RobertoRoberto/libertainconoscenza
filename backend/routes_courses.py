@@ -447,6 +447,42 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
         await db.courses.update_one({"id": course_id}, {"$set": {"updated_at": _now()}})
         return {"ok": True}
 
+    @router.get("/admin/courses/{course_id}/stats", dependencies=[Depends(require_admin)])
+    async def admin_course_stats(course_id: str):
+        course = await db.courses.find_one({"id": course_id})
+        if not course:
+            raise HTTPException(404, "Corso non trovato")
+        enrolled_count = await db.course_enrollments.count_documents({"course_id": course_id})
+        passed_count = await db.course_enrollments.count_documents({"course_id": course_id, "quiz_passed": True})
+        quiz_attempts_total = await db.quiz_attempts.count_documents({"course_id": course_id})
+        # completion = quiz passed (only way to complete a course today)
+        completed_count = passed_count
+        # Success rate = passed / attempted (users who submitted at least one attempt)
+        users_attempted = await db.quiz_attempts.distinct("user_id", {"course_id": course_id})
+        attempted_users_count = len(users_attempted)
+        success_rate = (passed_count / attempted_users_count) if attempted_users_count else 0.0
+        # Revenue placeholder — payments not yet integrated
+        try:
+            purchases_count = await db.course_orders.count_documents({"course_id": course_id, "status": "active"})
+        except Exception:
+            purchases_count = 0
+        revenue_eur = 0
+        return {
+            "course_id": course_id,
+            "course_title": course.get("title"),
+            "kind": course.get("kind"),
+            "price": course.get("price", 0),
+            "enrolled_count": enrolled_count,
+            "attempted_users_count": attempted_users_count,
+            "quiz_attempts_total": quiz_attempts_total,
+            "completed_count": completed_count,
+            "passed_count": passed_count,
+            "success_rate": success_rate,
+            "purchases_count": purchases_count,
+            "revenue_eur": revenue_eur,
+            "payments_active": False,
+        }
+
     # ---------- User endpoints ----------
     @router.get("/course-areas", dependencies=[Depends(current_user)])
     async def user_list_areas():

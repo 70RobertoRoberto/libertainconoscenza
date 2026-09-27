@@ -3,16 +3,17 @@ import { View, Text, ScrollView, StyleSheet, Pressable, TextInput } from "react-
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, auth } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
 
 type Plan = { key: string; months: number; days: number; price_eur: number; label: string };
+type Sub = { status?: string; days_remaining?: number | null; active?: boolean };
 
 export default function Paywall() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [plans, setPlans] = useState<Plan[]>([]);
-  const [selected, setSelected] = useState("12m");
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [sub, setSub] = useState<Sub | null>(null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [coupon, setCoupon] = useState("");
@@ -20,26 +21,23 @@ export default function Paywall() {
   const [couponErr, setCouponErr] = useState("");
 
   useEffect(() => {
-    api<{ plans: Record<string, any> }>("/plans").then((r) => {
-      const ORDER = ["24h", "1w", "3m", "6m", "12m"];
-      const arr = Object.entries(r.plans)
-        .map(([k, v]: any) => ({ key: k, ...v }))
-        .sort((a, b) => {
-          const ia = ORDER.indexOf(a.key);
-          const ib = ORDER.indexOf(b.key);
-          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
-        });
-      setPlans(arr);
-    });
+    api<{ plans: Record<string, any> }>("/plans")
+      .then((r) => {
+        const list = Object.entries(r.plans).map(([k, v]: any) => ({ key: k, ...v }));
+        setPlan(list[0] || null);
+      })
+      .catch(() => {});
+    auth.me().then((u: any) => setSub(u?.subscription)).catch(() => {});
   }, []);
 
   const submit = async () => {
+    if (!plan) return;
     setLoading(true);
     setMsg("");
     try {
       const r = await api<any>("/billing/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: selected, coupon_code: couponInfo?.code }),
+        body: JSON.stringify({ plan: plan.key, coupon_code: couponInfo?.code }),
       });
       setMsg(
         r.message ||
@@ -58,7 +56,7 @@ export default function Paywall() {
     try {
       const r = await api<any>("/coupons/validate", {
         method: "POST",
-        body: JSON.stringify({ code: coupon.trim() }),
+        body: JSON.stringify({ code: coupon.trim(), plan: plan?.key }),
       });
       setCouponInfo({ code: r.code, percent_off: r.percent_off });
     } catch (e: any) {
@@ -66,6 +64,12 @@ export default function Paywall() {
       setCouponErr(e.message);
     }
   };
+
+  const discounted = plan && couponInfo
+    ? Math.round(plan.price_eur * (100 - couponInfo.percent_off) / 100)
+    : plan?.price_eur ?? 0;
+  const showTrialBanner = sub?.status === "trial" && (sub?.days_remaining ?? 0) > 0;
+  const trialDays = sub?.days_remaining ?? 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -82,6 +86,16 @@ export default function Paywall() {
           Accesso completo a corsi, meditazioni e contenuti premium.
         </Muted>
 
+        {showTrialBanner ? (
+          <View style={styles.trialBox}>
+            <Text style={styles.trialTitle}>🎁 Prova gratuita attiva</Text>
+            <Text style={styles.trialBody}>
+              Ti restano <Text style={{ fontWeight: "800" }}>{trialDays} {trialDays === 1 ? "giorno" : "giorni"}</Text> di accesso completo.
+              {" "}{"Sottoscrivi ora l'abbonamento per continuare senza interruzioni."}
+            </Text>
+          </View>
+        ) : null}
+
         {["Corsi guidati con Maestri", "Meditazioni esclusive audio", "Articoli approfonditi", "Nessuna interruzione", "Accesso multi-dispositivo"].map((b) => (
           <View key={b} style={styles.benefit}>
             <Text style={styles.check}>✓</Text>
@@ -92,51 +106,30 @@ export default function Paywall() {
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>{"ℹ️  Come funziona l'attivazione"}</Text>
           <Text style={styles.infoBody}>
-            Scegli il piano e invia la richiesta. Ti contatteremo per completare il pagamento
-            (bonifico, contanti o accordo diretto) e attiveremo il tuo accesso Premium entro poche ore.
+            {"Al termine della prova di 15 giorni, sottoscrivi l'abbonamento annuale a soli 12€. La richiesta ci arriva e ti contatteremo per completare il pagamento (bonifico, contanti o accordo diretto) e attiveremo il tuo accesso Premium entro poche ore."}
           </Text>
         </View>
 
-        <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
-          {plans.map((p) => {
-            const active = p.key === selected;
-            const best = p.key === "12m";
-            const discounted = couponInfo ? Math.round(p.price_eur * (100 - couponInfo.percent_off) / 100) : p.price_eur;
-            // Compact caption per plan (avoid weird "€10/mese" for a 24h trial)
-            let caption = "";
-            if (p.key === "24h") caption = "accesso di 24 ore";
-            else if (p.key === "1w") caption = "accesso di 7 giorni";
-            else if (p.key === "12m") caption = "solo €75/mese";
-            else if (p.months && p.months > 0) caption = `€${(p.price_eur / p.months).toFixed(0)}/mese`;
-            else caption = `${p.days || ""} giorni`;
-            return (
-              <Pressable
-                key={p.key}
-                testID={`plan-${p.key}`}
-                onPress={() => setSelected(p.key)}
-                style={[styles.plan, active && styles.planActive]}
-              >
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                    <Text style={styles.planLbl}>{p.label}</Text>
-                    {best ? (
-                      <View style={styles.best}>
-                        <Text style={styles.bestTxt}>MIGLIOR VALORE</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <Muted style={{ marginTop: 4 }}>{caption}</Muted>
+        {plan ? (
+          <View style={styles.planCard}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <Text style={styles.planLbl}>Abbonamento Annuale</Text>
+                <View style={styles.best}>
+                  <Text style={styles.bestTxt}>MIGLIOR VALORE</Text>
                 </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  {couponInfo ? (
-                    <Text style={styles.oldPrice}>€{p.price_eur}</Text>
-                  ) : null}
-                  <Text style={styles.price}>€{discounted}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+              </View>
+              <Muted style={{ marginTop: 4 }}>Accesso completo per 12 mesi · 1€/mese</Muted>
+            </View>
+            <View style={{ alignItems: "flex-end" }}>
+              {couponInfo ? (
+                <Text style={styles.oldPrice}>€{plan.price_eur}</Text>
+              ) : null}
+              <Text style={styles.price}>€{discounted}</Text>
+              <Muted style={{ fontSize: 11 }}>/anno</Muted>
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ marginTop: spacing.xl }}>
           <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, marginBottom: spacing.sm }}>
@@ -195,18 +188,18 @@ const styles = StyleSheet.create({
     width: 24,
   },
   benefitTxt: { color: colors.onSurfaceSecondary, fontSize: 15, flex: 1 },
-  plan: {
+  planCard: {
+    marginTop: spacing.xl,
     flexDirection: "row",
     alignItems: "center",
     padding: spacing.lg,
     borderRadius: radius.lg,
     borderWidth: 2,
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceSecondary,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.brandTertiary,
   },
-  planActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandTertiary },
   planLbl: { color: colors.onSurface, fontSize: 17, fontWeight: "700" },
-  price: { color: colors.brandPrimary, fontSize: 22, fontWeight: "800" },
+  price: { color: colors.brandPrimary, fontSize: 32, fontWeight: "800" },
   best: {
     backgroundColor: colors.brandPrimary,
     paddingHorizontal: 8,
@@ -238,6 +231,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   applyTxt: { color: colors.brandPrimary, fontWeight: "700" },
+  trialBox: {
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    marginBottom: spacing.md,
+  },
+  trialTitle: { color: colors.brandPrimary, fontWeight: "800", fontSize: 15 },
+  trialBody: { color: colors.onSurfaceSecondary, fontSize: 13, marginTop: 6, lineHeight: 19 },
   infoBox: {
     marginTop: spacing.xl,
     padding: spacing.lg,

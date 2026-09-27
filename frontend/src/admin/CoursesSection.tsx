@@ -341,6 +341,7 @@ function CourseList({ active, onOpen }: { active: boolean; onOpen: (id: string) 
     refetchOnMount: "always",
   });
   const items = data?.items || [];
+  const [statsForId, setStatsForId] = useState<string | null>(null);
 
   const toggle = async (c: Course) => {
     try {
@@ -383,6 +384,9 @@ function CourseList({ active, onOpen }: { active: boolean; onOpen: (id: string) 
               <Pressable onPress={() => onOpen(c.id)} style={s.actionBtn}>
                 <Text style={s.actionTxt}>Modifica</Text>
               </Pressable>
+              <Pressable onPress={() => setStatsForId(c.id)} style={[s.actionBtn, s.actionBtnAlt]}>
+                <Text style={s.actionTxt}>📊 Statistiche</Text>
+              </Pressable>
               <Pressable onPress={() => toggle(c)} style={[s.actionBtn, s.actionBtnAlt]}>
                 <Text style={s.actionTxt}>{c.is_active ? "Disattiva" : "Attiva"}</Text>
               </Pressable>
@@ -393,9 +397,157 @@ function CourseList({ active, onOpen }: { active: boolean; onOpen: (id: string) 
           </View>
         </View>
       ))}
+      {statsForId ? (
+        <CourseStatsModal courseId={statsForId} onClose={() => setStatsForId(null)} />
+      ) : null}
     </>
   );
 }
+
+/* ─────────── Course stats modal ─────────── */
+type CourseStats = {
+  course_title: string;
+  kind: string;
+  price: number;
+  enrolled_count: number;
+  attempted_users_count: number;
+  quiz_attempts_total: number;
+  completed_count: number;
+  passed_count: number;
+  success_rate: number;
+  purchases_count: number;
+  revenue_eur: number;
+  payments_active: boolean;
+};
+
+function CourseStatsModal({ courseId, onClose }: { courseId: string; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["c-stats", courseId],
+    queryFn: () => api<CourseStats>(`/admin/courses/${courseId}/stats`),
+    refetchOnMount: "always",
+  });
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.modalBackdrop}>
+        <View style={[s.modalCard, { maxWidth: 480 }]}>
+          <Text style={s.h1}>📊 Statistiche corso</Text>
+          {isLoading || !data ? (
+            <ActivityIndicator color={colors.brandPrimary} style={{ marginVertical: spacing.xl }} />
+          ) : (
+            <>
+              <Text style={{ color: colors.onSurface, fontWeight: "700", fontSize: 15, marginBottom: spacing.md }} numberOfLines={2}>
+                {data.course_title}
+              </Text>
+              <View style={statStyles.grid}>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{data.enrolled_count}</Text>
+                  <Text style={statStyles.lbl}>Iscritti totali</Text>
+                </View>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{data.attempted_users_count}</Text>
+                  <Text style={statStyles.lbl}>Hanno tentato il quiz</Text>
+                </View>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{data.passed_count}</Text>
+                  <Text style={statStyles.lbl}>Quiz superati</Text>
+                </View>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{Math.round((data.success_rate || 0) * 100)}%</Text>
+                  <Text style={statStyles.lbl}>Tasso di successo</Text>
+                </View>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{data.quiz_attempts_total}</Text>
+                  <Text style={statStyles.lbl}>Tentativi totali</Text>
+                </View>
+                <View style={statStyles.box}>
+                  <Text style={statStyles.val}>{data.completed_count}</Text>
+                  <Text style={statStyles.lbl}>Corsi completati</Text>
+                </View>
+              </View>
+
+              <View style={statStyles.revenue}>
+                <Text style={statStyles.revenueLbl}>💰 Guadagno reale</Text>
+                <Text style={statStyles.revenueVal}>€ {data.revenue_eur.toFixed(2)}</Text>
+                {!data.payments_active ? (
+                  <Text style={statStyles.revenueNote}>
+                    Pagamenti in attivazione — il guadagno reale sarà visibile una volta collegati Stripe e PayPal.
+                  </Text>
+                ) : null}
+                {data.kind === "premium" ? (
+                  <Text style={statStyles.revenueNote}>
+                    Prezzo del corso: €{(data.price || 0).toFixed(2)} · Acquisti registrati: {data.purchases_count}
+                  </Text>
+                ) : (
+                  <Text style={statStyles.revenueNote}>
+                    {"Corso Base: incluso nell'abbonamento annuale (12€/anno)."}
+                  </Text>
+                )}
+              </View>
+            </>
+          )}
+          <Pressable onPress={onClose} style={[s.primaryBtn, { marginTop: spacing.md }]}>
+            <Text style={s.primaryTxt}>Chiudi</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const statStyles = StyleSheet.create({
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  box: {
+    flexGrow: 1,
+    flexBasis: "30%",
+    minWidth: 100,
+    backgroundColor: colors.surfaceTertiary,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: "center",
+  },
+  val: {
+    color: colors.brandPrimary,
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  lbl: {
+    color: colors.onSurfaceTertiary,
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  revenue: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  revenueLbl: {
+    color: colors.brandPrimary,
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  revenueVal: {
+    color: colors.brandPrimary,
+    fontSize: 26,
+    fontWeight: "800",
+    marginTop: 4,
+  },
+  revenueNote: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 11,
+    marginTop: 6,
+    lineHeight: 15,
+  },
+});
 
 /* ─────────── Areas CRUD modal ─────────── */
 function AreasModal({ onClose }: { onClose: () => void }) {

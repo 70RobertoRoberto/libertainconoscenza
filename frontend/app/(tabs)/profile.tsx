@@ -26,7 +26,9 @@ export default function Profile() {
     api<any>("/me/certificates").then((r) => setCertCount(r?.items?.length || 0)).catch(() => {});
   }, []);
 
-  const isPremium = user?.subscription?.status === "premium";
+  const sub = user?.subscription || {};
+  const isPremium = sub.status === "premium";
+  const isTrial = sub.status === "trial" && (sub.days_remaining ?? 0) > 0;
 
   const shareReferral = async () => {
     if (!ref?.code) return;
@@ -59,6 +61,8 @@ export default function Profile() {
         <View style={{ marginTop: spacing.md, flexDirection: "row", gap: spacing.sm }}>
           {isPremium ? (
             <Badge label={t("premium")} tone="brand" />
+          ) : isTrial ? (
+            <Badge label={`Prova · ${sub.days_remaining}g`} tone="brand" />
           ) : (
             <Badge label={t("free")} tone="muted" />
           )}
@@ -80,13 +84,17 @@ export default function Profile() {
 
       {!isPremium && (
         <Card style={{ marginBottom: spacing.lg }}>
-          <Text style={styles.upgradeTitle}>{t("unlock_advanced")}</Text>
+          <Text style={styles.upgradeTitle}>
+            {isTrial ? `⏳ Prova gratuita: ${sub.days_remaining} ${sub.days_remaining === 1 ? "giorno" : "giorni"} rimasti` : t("unlock_advanced")}
+          </Text>
           <Muted style={{ marginTop: spacing.sm, marginBottom: spacing.lg }}>
-            {t("unlock_desc")}
+            {isTrial
+              ? "Sottoscrivi ora l'abbonamento annuale a 12€ per continuare senza interruzioni."
+              : t("unlock_desc")}
           </Muted>
           <GoldButton
             testID="upgrade-cta"
-            label={t("see_plans")}
+            label={isTrial ? "Abbonati a 12€/anno" : t("see_plans")}
             onPress={() => router.push("/paywall")}
           />
         </Card>

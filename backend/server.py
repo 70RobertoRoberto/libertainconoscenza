@@ -104,12 +104,10 @@ VIDEO_CATEGORY_SLUGS = {
 }
 
 PLANS = {
-    "24h": {"days": 1, "months": 0, "price_eur": 10, "label": "24 Ore"},
-    "1w": {"days": 7, "months": 0, "price_eur": 50, "label": "1 Settimana"},
-    "3m": {"days": 90, "months": 3, "price_eur": 300, "label": "3 Mesi"},
-    "6m": {"days": 180, "months": 6, "price_eur": 500, "label": "6 Mesi"},
-    "12m": {"days": 365, "months": 12, "price_eur": 900, "label": "12 Mesi"},
+    "12m": {"days": 365, "months": 12, "price_eur": 12, "label": "12 Mesi"},
 }
+
+TRIAL_DAYS = 15
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +212,8 @@ class CouponIn(BaseModel):
     percent_off: int = Field(ge=1, le=100)
     max_uses: int = Field(ge=1, default=100)
     expires_at: Optional[str] = None
+    scope: str = "any"  # "any" | "plan" | "course"
+    course_id: Optional[str] = None  # required when scope == "course"
 
 
 class FavoriteIn(BaseModel):
@@ -305,9 +305,42 @@ def to_public_user(u: dict) -> dict:
         "phone": u["phone"],
         "name": u.get("name"),
         "is_admin": u.get("is_admin", False),
-        "subscription": u.get("subscription", {"status": "free"}),
+        "subscription": subscription_view(u),
         "referral_code": u.get("referral_code"),
     }
+
+
+def subscription_view(u: dict) -> dict:
+    """Return the user's live subscription with computed trial days remaining and
+    active-flag. Lazily downgrades expired trials/premium to 'free' in the
+    response (persistent downgrade handled elsewhere)."""
+    sub = u.get("subscription") or {"status": "free"}
+    status = sub.get("status") or "free"
+    expires_at = sub.get("expires_at")
+    days_remaining: Optional[int] = None
+    if expires_at:
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            if exp < now:
+                # Expired: treat as free
+                return {"status": "free", "plan": sub.get("plan"), "expires_at": expires_at, "days_remaining": 0, "active": False}
+            days_remaining = max(0, (exp - now).days)
+        except Exception:
+            pass
+    active = status in ("premium", "trial")
+    return {
+        "status": status,
+        "plan": sub.get("plan"),
+        "expires_at": expires_at,
+        "days_remaining": days_remaining,
+        "active": active,
+    }
+
+
+def is_subscription_active(u: dict) -> bool:
+    """True if user has an active premium OR trial subscription (not expired)."""
+    return bool(subscription_view(u).get("active"))
 
 
 def _gen_referral_code(name: str) -> str:
@@ -765,7 +798,7 @@ async def my_referrals(user: dict = Depends(current_user)):
             "id": x["id"],
             "name": x.get("name", ""),
             "phone": x["phone"][:6] + "***" + x["phone"][-3:],
-            "premium": x.get("subscription", {}).get("status") == "premium",
+            "premium": is_subscription_active(x),
             "created_at": x.get("created_at", ""),
         })
     return {
@@ -909,13 +942,18 @@ async def register(inp: RegisterIn):
     referral_code = _gen_referral_code(inp.name or "AMICO")
     while await db.users.find_one({"referral_code": referral_code}):
         referral_code = _gen_referral_code(inp.name or "AMICO")
+    trial_expires = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
     user = {
         "id": str(uuid.uuid4()),
         "phone": phone,
         "password_hash": hash_password(inp.password),
         "name": inp.name or "",
         "is_admin": False,
-        "subscription": {"status": "free"},
+        "subscription": {
+            "status": "trial",
+            "plan": "trial_15d",
+            "expires_at": trial_expires,
+        },
         "referral_code": referral_code,
         "referred_by": referred_by,
         "referral_count": 0,
@@ -1346,7 +1384,7 @@ async def get_media(media_id: str, lang: Optional[str] = None, user: dict = Depe
     if not m:
         raise HTTPException(404, "Non trovato")
     # premium gating
-    if m.get("is_premium") and user.get("subscription", {}).get("status") != "premium":
+    if m.get("is_premium") and not is_subscription_active(user):
         raise HTTPException(402, "Contenuto premium: abbonamento richiesto")
     await db.media.update_one({"id": media_id}, {"$inc": {"views": 1}})
     await db.views.insert_one({
@@ -1502,7 +1540,7 @@ async def list_users():
             "phone": u["phone"],
             "name": u.get("name", ""),
             "is_admin": u.get("is_admin", False),
-            "subscription": u.get("subscription", {"status": "free"}),
+            "subscription": subscription_view(u),
             "created_at": u.get("created_at", ""),
         })
     return {"items": items}
@@ -1572,7 +1610,15 @@ async def stats_summary():
     total_articles = await db.articles.count_documents({})
     total_media = await db.media.count_documents({})
     total_views = await db.views.count_documents({})
-    premium_users = await db.users.count_documents({"subscription.status": "premium"})
+    now_iso_str = datetime.now(timezone.utc).isoformat()
+    premium_users = await db.users.count_documents({
+        "subscription.status": "premium",
+        "$or": [{"subscription.expires_at": None}, {"subscription.expires_at": {"$gte": now_iso_str}}],
+    })
+    trial_users = await db.users.count_documents({
+        "subscription.status": "trial",
+        "subscription.expires_at": {"$gte": now_iso_str},
+    })
 
     # App start date = earliest view date (fallback: earliest user, then today)
     app_start_date: Optional[str] = None
@@ -1601,6 +1647,7 @@ async def stats_summary():
     return {
         "users": total_users,
         "premium_users": premium_users,
+        "trial_users": trial_users,
         "articles": total_articles,
         "media": total_media,
         "total_views": total_views,
@@ -1815,6 +1862,10 @@ async def create_coupon(inp: CouponIn):
         raise HTTPException(400, "Codice non valido")
     if await db.coupons.find_one({"code": code}):
         raise HTTPException(409, "Codice già esistente")
+    scope = inp.scope if inp.scope in ("any", "plan", "course") else "any"
+    course_id = inp.course_id if scope == "course" else None
+    if scope == "course" and not course_id:
+        raise HTTPException(400, "course_id richiesto per coupon con scope 'course'")
     doc = {
         "id": str(uuid.uuid4()),
         "code": code,
@@ -1822,6 +1873,8 @@ async def create_coupon(inp: CouponIn):
         "max_uses": inp.max_uses,
         "used_count": 0,
         "expires_at": inp.expires_at,
+        "scope": scope,
+        "course_id": course_id,
         "created_at": now_iso(),
     }
     await db.coupons.insert_one(doc)
@@ -1847,6 +1900,8 @@ async def delete_coupon(code: str):
 @api.post("/coupons/validate")
 async def validate_coupon(payload: dict, user: dict = Depends(current_user)):
     code = (payload.get("code") or "").strip().upper()
+    course_id = payload.get("course_id")
+    plan = payload.get("plan")
     if not code:
         raise HTTPException(400, "Codice mancante")
     c = await db.coupons.find_one({"code": code}, {"_id": 0})
@@ -1860,7 +1915,16 @@ async def validate_coupon(payload: dict, user: dict = Depends(current_user)):
                 raise HTTPException(410, "Codice scaduto")
         except ValueError:
             pass
-    return {"code": c["code"], "percent_off": c["percent_off"]}
+    scope = c.get("scope", "any")
+    if scope == "course":
+        if not course_id:
+            raise HTTPException(400, "Questo codice è valido solo su un corso specifico")
+        if c.get("course_id") and c.get("course_id") != course_id:
+            raise HTTPException(400, "Codice non valido per questo corso")
+    elif scope == "plan":
+        if not plan:
+            raise HTTPException(400, "Questo codice è valido solo per l'abbonamento")
+    return {"code": c["code"], "percent_off": c["percent_off"], "scope": scope}
 
 
 # ---------------------------------------------------------------------------
@@ -1880,6 +1944,8 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
             raise HTTPException(404, "Codice sconto non valido")
         if c.get("used_count", 0) >= c.get("max_uses", 0):
             raise HTTPException(410, "Codice sconto esaurito")
+        if c.get("scope") == "course":
+            raise HTTPException(400, "Questo codice è valido solo su un corso, non sull'abbonamento")
         amount = round(amount * (100 - c["percent_off"]) / 100)
         applied_code = code
         await db.coupons.update_one({"code": code}, {"$inc": {"used_count": 1}})
