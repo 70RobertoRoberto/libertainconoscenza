@@ -129,7 +129,12 @@ export default function CorsiScreen() {
                   contentContainerStyle={{ paddingHorizontal: spacing.xl, gap: spacing.md }}
                 >
                   {upcoming.map((c) => (
-                    <View key={c.id} style={styles.upcomingCard}>
+                    <Pressable
+                      key={c.id}
+                      testID={`upcoming-${c.id}`}
+                      onPress={() => router.push(`/course/${c.id}` as any)}
+                      style={styles.upcomingCard}
+                    >
                       {c.cover_url ? <Image source={{ uri: c.cover_url }} style={styles.upcomingCover} /> : null}
                       <View style={styles.upcomingBadge}>
                         <Text style={styles.upcomingBadgeTxt}>In arrivo</Text>
@@ -137,7 +142,10 @@ export default function CorsiScreen() {
                       <Text style={styles.upcomingTitle} numberOfLines={2}>
                         {c.kind === "premium" ? "👑  " : ""}{c.title}
                       </Text>
-                    </View>
+                      {c.kind === "premium" && (c.price || 0) > 0 ? (
+                        <Text style={styles.upcomingPrice}>€ {c.price.toFixed(2)}</Text>
+                      ) : null}
+                    </Pressable>
                   ))}
                 </ScrollView>
               </>
@@ -306,6 +314,14 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   upcomingCover: { width: 180, height: 110, backgroundColor: colors.surfaceSecondary },
+  upcomingPrice: {
+    marginTop: spacing.xs,
+    marginHorizontal: spacing.sm,
+    marginBottom: spacing.sm,
+    color: colors.brandPrimary,
+    fontWeight: "800",
+    fontSize: 13,
+  },
   upcomingBadge: {
     position: "absolute",
     top: 8,

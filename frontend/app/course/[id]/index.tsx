@@ -17,6 +17,7 @@ type CourseDetail = {
     topic_count: number; has_quiz: boolean;
     promo: { active: boolean; price_promo?: number | null };
   };
+  preview?: boolean;
   topics_summary: { id: string; title: string; kind: string; order: number }[];
   enrolled: boolean;
   enrollment?: {
@@ -98,7 +99,7 @@ export default function CourseDetailScreen() {
       </View>
     );
   }
-  const { course, topics_summary, enrolled, enrollment } = data;
+  const { course, topics_summary, enrolled, enrollment, preview } = data;
   const isPremium = course.kind === "premium";
   const isPromo = course.promo?.active;
   const basePrice = isPromo && typeof course.promo?.price_promo === "number"
@@ -182,7 +183,15 @@ export default function CourseDetailScreen() {
 
       {/* Sticky CTA */}
       <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
-        {!enrolled && isPremium ? (
+        {preview ? (
+          <View style={styles.previewBanner}>
+            <Text style={styles.previewTitle}>🕒  Corso in preparazione</Text>
+            <Text style={styles.previewBody}>
+              {"Questo corso non è ancora disponibile: sarà presto attivato. Torna a trovarci!"}
+              {isPremium && (course.price || 0) > 0 ? ` Quando sarà attivo potrai acquistarlo a € ${showPrice}.` : ""}
+            </Text>
+          </View>
+        ) : !enrolled && isPremium ? (
           <View style={{ marginBottom: spacing.md }}>
             <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginBottom: 6 }}>
               Hai un codice sconto?
@@ -215,7 +224,7 @@ export default function CourseDetailScreen() {
             ) : null}
           </View>
         ) : null}
-        {enrolled ? (
+        {preview ? null : enrolled ? (
           <Pressable onPress={() => router.push(`/course/${id}/read` as any)} style={styles.ctaBtn}>
             <Text style={styles.ctaTxt}>
               {enrollment?.quiz_passed ? "Rivedi il corso ›" : "Continua il corso ›"}
@@ -390,4 +399,22 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   ctaDisabled: { opacity: 0.45 },
+  previewBanner: {
+    padding: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  previewTitle: {
+    color: colors.brandPrimary,
+    fontWeight: "800",
+    fontSize: 15,
+  },
+  previewBody: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+  },
 });

@@ -517,22 +517,26 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
     @router.get("/courses/{course_id}", dependencies=[Depends(current_user)])
     async def user_get_course(course_id: str, user: dict = Depends(current_user)):
         doc = await db.courses.find_one({"id": course_id})
-        if not doc or not doc.get("is_active"):
-            raise HTTPException(404, "Corso non disponibile")
+        if not doc:
+            raise HTTPException(404, "Corso non trovato")
+        preview = not bool(doc.get("is_active"))
         area_name = None
         if doc.get("area_id"):
             a = await db.course_areas.find_one({"id": doc["area_id"]})
             area_name = a["name"] if a else None
         topics = await db.course_topics.find({"course_id": course_id}).sort("order", 1).to_list(500)
         qz = await db.course_quizzes.find_one({"course_id": course_id})
-        # Enrollment check
-        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        # Enrollment check (only if not preview)
+        enrollment = None
+        if not preview:
+            enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
         return {
             "course": _course_out(doc, area_name, len(topics), bool(qz)),
+            "preview": preview,
             "topics_summary": [
                 {"id": t["id"], "title": t["title"], "kind": t.get("kind", "modulo"), "order": t.get("order", 0)}
                 for t in topics
-            ],
+            ] if not preview else [],
             "enrolled": bool(enrollment),
             "enrollment": enrollment and {
                 "started_at": enrollment.get("started_at"),
