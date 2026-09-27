@@ -2443,6 +2443,10 @@ async def reorder_playlist(playlist_id: str, inp: PlaylistReorder, user: dict = 
 # ---------------------------------------------------------------------------
 app.include_router(api)
 
+# Corsi (courses) router — separate module.
+from routes_courses import build_courses_router  # noqa: E402
+app.include_router(build_courses_router(db, current_user, require_admin))
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

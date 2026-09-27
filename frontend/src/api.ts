@@ -54,6 +54,47 @@ export async function api<T = any>(
   return data as T;
 }
 
+/**
+ * Upload a file (image, audio, video) via multipart streaming.
+ * Uses FileSystem.uploadAsync on native to avoid JS-memory blowup / Expo Go crashes
+ * on Android with large files. Returns { url } from the /admin/upload endpoint.
+ */
+export async function adminUpload(
+  fileUri: string,
+  contentType: string,
+  fileName = "upload.bin",
+): Promise<{ url: string }> {
+  const token = await getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  if (Platform.OS === "web") {
+    // On web, expo returns a blob URL; fetch it into a Blob and post as FormData.
+    const blob = await (await fetch(fileUri)).blob();
+    const fd = new FormData();
+    fd.append("file", blob as any, fileName);
+    const r = await fetch(`${BASE}/api/admin/upload`, { method: "POST", headers, body: fd });
+    if (!r.ok) throw new Error(`Upload fallito (${r.status})`);
+    return r.json();
+  }
+
+  // Native: stream from disk via FileSystem
+  const FileSystem = await import("expo-file-system/legacy");
+  const res = await FileSystem.uploadAsync(`${BASE}/api/admin/upload`, fileUri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "file",
+    mimeType: contentType,
+    headers,
+  });
+  if (res.status < 200 || res.status >= 300) throw new Error(`Upload fallito (${res.status})`);
+  try {
+    return JSON.parse(res.body);
+  } catch {
+    throw new Error("Risposta upload non valida");
+  }
+}
+
 export const auth = {
   async login(phone: string, password: string) {
     const r = await api<{ access_token: string; user: any }>("/auth/login", {

@@ -23,6 +23,7 @@ import { GoldButton, Muted, Card } from "@/src/ui";
 import MarkdownEditor from "@/src/MarkdownEditor";
 import { MEDITATION_CATEGORIES as MED_CATS_CONST } from "@/src/meditationCategories";
 import { VIDEO_CATEGORY_NAMES as VIDEO_CATS } from "@/src/videoCategories";
+import { CoursesSection } from "@/src/admin/CoursesSection";
 
 const MEDITATION_CATS = MED_CATS_CONST.map((c) => c.name);
 
@@ -33,7 +34,7 @@ const CATEGORIES = [
   "Crescita personale", "Medicina Integrata", "Filosofia", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets";
+type Section = "stats" | "articles" | "media" | "courses" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets";
 
 export default function Admin() {
   const router = useRouter();
@@ -44,6 +45,7 @@ export default function Admin() {
     { key: "stats", label: "Statistiche" },
     { key: "articles", label: "Articoli" },
     { key: "media", label: "Video/Med." },
+    { key: "courses", label: "Corsi" },
     { key: "youtube", label: "YouTube" },
     { key: "ads", label: "Pubblicità" },
     { key: "coupons", label: "Sconti" },
@@ -91,6 +93,7 @@ export default function Admin() {
         {section === "stats" && <StatsSection />}
         {section === "articles" && <ArticlesSection />}
         {section === "media" && <MediaSection />}
+        {section === "courses" && <CoursesSection />}
         {section === "youtube" && <YoutubeSection />}
         {section === "ads" && <AdsSection />}
         {section === "coupons" && <CouponsSection />}
