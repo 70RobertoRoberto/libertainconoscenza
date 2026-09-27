@@ -117,6 +117,7 @@ class RegisterIn(BaseModel):
     phone: str
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=2, max_length=80)
+    email: Optional[str] = None
     referral_code: Optional[str] = None
 
 
@@ -203,8 +204,9 @@ class SummarizeIn(BaseModel):
 
 
 class CheckoutIn(BaseModel):
-    plan: str  # "3m" | "6m" | "12m"
+    plan: str  # only "12m" now
     coupon_code: Optional[str] = None
+    email: Optional[str] = None  # optional email to receive receipt; also saved to user
 
 
 class CouponIn(BaseModel):
@@ -267,7 +269,7 @@ def check_password(pw: str, h: str) -> bool:
         return False
 
 
-def make_token(user_id: str) -> str:
+def make_token(user_id: str, session_id: Optional[str] = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": user_id,
@@ -275,6 +277,8 @@ def make_token(user_id: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=JWT_TTL_MIN)).timestamp()),
     }
+    if session_id:
+        payload["sid"] = session_id
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
@@ -290,6 +294,18 @@ async def current_user(authorization: str = Header(default="")) -> dict:
     user = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(401, "User not found")
+    # Enforce single-session for non-admin users (Option A):
+    # admins can log in from many devices in parallel; regular users get
+    # kicked out of the previous session as soon as they log in elsewhere.
+    if not user.get("is_admin"):
+        current_sid = user.get("current_session_id")
+        if current_sid:
+            token_sid = claims.get("sid")
+            if token_sid and token_sid != current_sid:
+                raise HTTPException(
+                    401,
+                    "Sessione scaduta: hai effettuato l'accesso da un altro dispositivo",
+                )
     return user
 
 
@@ -303,12 +319,15 @@ def to_public_user(u: dict) -> dict:
     return {
         "id": u["id"],
         "phone": u["phone"],
+        "email": u.get("email"),
         "name": u.get("name"),
         "is_admin": u.get("is_admin", False),
         "subscription": subscription_view(u),
         "referral_code": u.get("referral_code"),
         "marketing_consent": bool(u.get("marketing_consent", False)),
-        "cookie_consent": u.get("cookie_consent"),  # null if not yet decided
+        "cookie_consent": u.get("cookie_consent"),
+        "last_login_at": u.get("last_login_at"),
+        "last_login_device": u.get("last_login_device"),
     }
 
 
@@ -377,6 +396,8 @@ async def startup():
     await db.course_areas.create_index("slug", unique=True)
     await db.support_tickets.create_index("id", unique=True)
     await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+    await db.users.create_index("email", unique=True, sparse=True)
+    await db.login_history.create_index([("user_id", 1), ("at", -1)])
 
     # Preseed default course thematic areas (idempotent)
     _default_areas = [
@@ -959,11 +980,53 @@ async def admin_delete_comment(comment_id: str):
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+def _parse_ua(ua: str) -> str:
+    """Best-effort user-agent → short human label ('Chrome su Windows')."""
+    if not ua:
+        return "Sconosciuto"
+    ua_low = ua.lower()
+    if "iphone" in ua_low or "ipad" in ua_low or ("mac os" in ua_low and "mobile" in ua_low):
+        os_lbl = "iPhone" if "iphone" in ua_low else ("iPad" if "ipad" in ua_low else "iOS")
+    elif "android" in ua_low:
+        os_lbl = "Android"
+    elif "windows" in ua_low:
+        os_lbl = "Windows"
+    elif "mac os" in ua_low or "macintosh" in ua_low:
+        os_lbl = "macOS"
+    elif "linux" in ua_low:
+        os_lbl = "Linux"
+    else:
+        os_lbl = "Sconosciuto"
+    if "expo" in ua_low or "okhttp" in ua_low:
+        br_lbl = "Expo Go"
+    elif "edg/" in ua_low:
+        br_lbl = "Edge"
+    elif "chrome" in ua_low and "safari" in ua_low:
+        br_lbl = "Chrome"
+    elif "firefox" in ua_low:
+        br_lbl = "Firefox"
+    elif "safari" in ua_low:
+        br_lbl = "Safari"
+    else:
+        br_lbl = "App"
+    return f"{br_lbl} su {os_lbl}"
+
+
 @api.post("/auth/register", response_model=TokenOut)
-async def register(inp: RegisterIn):
+async def register(inp: RegisterIn, request: Request):
     phone = normalize_phone(inp.phone)
     if await db.users.find_one({"phone": phone}):
         raise HTTPException(409, "Numero già registrato")
+    # Optional email; if provided must be unique across non-admin users
+    email = None
+    if inp.email:
+        e = inp.email.strip().lower()
+        if e:
+            if "@" not in e or "." not in e.split("@")[-1]:
+                raise HTTPException(400, "Email non valida")
+            if await db.users.find_one({"email": e}):
+                raise HTTPException(409, "Email già registrata")
+            email = e
     referred_by = None
     if inp.referral_code:
         code = inp.referral_code.strip().upper()
@@ -974,9 +1037,14 @@ async def register(inp: RegisterIn):
     while await db.users.find_one({"referral_code": referral_code}):
         referral_code = _gen_referral_code(inp.name or "AMICO")
     trial_expires = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
+    sid = str(uuid.uuid4())
+    ua = request.headers.get("user-agent", "") if request else ""
+    ip = request.client.host if request and request.client else None
+    device_lbl = _parse_ua(ua)
     user = {
         "id": str(uuid.uuid4()),
         "phone": phone,
+        "email": email,
         "password_hash": hash_password(inp.password),
         "name": inp.name or "",
         "is_admin": False,
@@ -988,21 +1056,72 @@ async def register(inp: RegisterIn):
         "referral_code": referral_code,
         "referred_by": referred_by,
         "referral_count": 0,
+        "current_session_id": sid,
+        "last_login_at": now_iso(),
+        "last_login_device": device_lbl,
+        "last_login_ip": ip,
         "created_at": now_iso(),
     }
     await db.users.insert_one(user)
+    # Log this login into history
+    await db.login_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "at": now_iso(),
+        "device": device_lbl,
+        "ua": ua[:200],
+        "ip": ip,
+        "kind": "register",
+    })
     if referred_by:
         await db.users.update_one({"id": referred_by}, {"$inc": {"referral_count": 1}})
-    return TokenOut(access_token=make_token(user["id"]), user=to_public_user(user))
+    return TokenOut(access_token=make_token(user["id"], sid), user=to_public_user(user))
 
 
 @api.post("/auth/login", response_model=TokenOut)
-async def login(inp: LoginIn):
+async def login(inp: LoginIn, request: Request):
     phone = normalize_phone(inp.phone)
     u = await db.users.find_one({"phone": phone})
     if not u or not check_password(inp.password, u["password_hash"]):
         raise HTTPException(401, "Credenziali non valide")
-    return TokenOut(access_token=make_token(u["id"]), user=to_public_user(u))
+    ua = request.headers.get("user-agent", "") if request else ""
+    ip = request.client.host if request and request.client else None
+    device_lbl = _parse_ua(ua)
+    # Admins can hold multiple concurrent sessions; regular users get a fresh
+    # session_id that invalidates the previous one (Option A: single session).
+    if u.get("is_admin"):
+        sid = str(uuid.uuid4())  # per-token id, do not persist
+        update = {"$set": {"last_login_at": now_iso(), "last_login_device": device_lbl, "last_login_ip": ip}}
+    else:
+        sid = str(uuid.uuid4())
+        update = {"$set": {
+            "current_session_id": sid,
+            "last_login_at": now_iso(),
+            "last_login_device": device_lbl,
+            "last_login_ip": ip,
+        }}
+    await db.users.update_one({"id": u["id"]}, update)
+    await db.login_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": u["id"],
+        "at": now_iso(),
+        "device": device_lbl,
+        "ua": ua[:200],
+        "ip": ip,
+        "kind": "login",
+    })
+    # Refresh user data so response reflects the new session data
+    u = await db.users.find_one({"id": u["id"]}, {"_id": 0, "password_hash": 0})
+    return TokenOut(access_token=make_token(u["id"], sid), user=to_public_user(u))
+
+
+@api.post("/auth/logout")
+async def logout(user: dict = Depends(current_user)):
+    """Invalidate current session for the user (except admins, whose sessions
+    are per-token and not tracked)."""
+    if not user.get("is_admin"):
+        await db.users.update_one({"id": user["id"]}, {"$unset": {"current_session_id": ""}})
+    return {"ok": True}
 
 
 @api.post("/me/subscription/cancel-renewal")
@@ -1034,6 +1153,50 @@ async def me(user: dict = Depends(current_user)):
 
 class MarketingConsentIn(BaseModel):
     consent: bool
+
+
+class SetEmailIn(BaseModel):
+    email: str
+
+
+@api.post("/me/email")
+async def set_my_email(inp: SetEmailIn, user: dict = Depends(current_user)):
+    e = (inp.email or "").strip().lower()
+    if not e or "@" not in e or "." not in e.split("@")[-1]:
+        raise HTTPException(400, "Email non valida")
+    if len(e) > 200:
+        raise HTTPException(400, "Email troppo lunga")
+    existing = await db.users.find_one({"email": e, "id": {"$ne": user["id"]}})
+    if existing:
+        raise HTTPException(409, "Questa email è già associata a un altro account")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"email": e}})
+    return {"ok": True, "email": e}
+
+
+@api.get("/me/login-history")
+async def my_login_history(user: dict = Depends(current_user)):
+    cur = db.login_history.find({"user_id": user["id"]}, {"_id": 0}).sort("at", -1).limit(30)
+    items = await cur.to_list(30)
+    return {"items": items}
+
+
+@api.get("/admin/users/{user_id}/login-history", dependencies=[Depends(require_admin)])
+async def admin_login_history(user_id: str):
+    cur = db.login_history.find({"user_id": user_id}, {"_id": 0}).sort("at", -1).limit(50)
+    items = await cur.to_list(50)
+    # Detect suspicious pattern: > 5 distinct IPs in the last 24h
+    from collections import Counter
+    now = datetime.now(timezone.utc)
+    recent_ips = Counter()
+    for it in items:
+        try:
+            at = datetime.fromisoformat(str(it.get("at")).replace("Z", "+00:00"))
+            if (now - at).total_seconds() <= 86400:
+                if it.get("ip"):
+                    recent_ips[it["ip"]] += 1
+        except Exception:
+            pass
+    return {"items": items, "distinct_ips_24h": len(recent_ips), "suspicious": len(recent_ips) > 5}
 
 
 @api.post("/me/marketing-consent")
@@ -2039,9 +2202,21 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
         amount = round(amount * (100 - c["percent_off"]) / 100)
         applied_code = code
         await db.coupons.update_one({"code": code}, {"$inc": {"used_count": 1}})
+    # Persist email if provided (used for receipt & future notices)
+    provided_email = None
+    if inp.email:
+        e = inp.email.strip().lower()
+        if "@" in e and "." in e.split("@")[-1]:
+            existing = await db.users.find_one({"email": e, "id": {"$ne": user["id"]}})
+            if not existing:
+                provided_email = e
+                await db.users.update_one({"id": user["id"]}, {"$set": {"email": e}})
+    order_no = f"ORD-{int(datetime.now(timezone.utc).timestamp())}"
     order = {
         "id": str(uuid.uuid4()),
+        "order_no": order_no,
         "user_id": user["id"],
+        "email": provided_email or user.get("email"),
         "plan": inp.plan,
         "amount_eur": amount,
         "original_eur": plan["price_eur"],
@@ -2054,6 +2229,7 @@ async def checkout(inp: CheckoutIn, user: dict = Depends(current_user)):
     await db.orders.insert_one(order)
     return {
         "order_id": order["id"],
+        "order_no": order_no,
         "plan": inp.plan,
         "amount_eur": amount,
         "original_eur": plan["price_eur"],
@@ -2080,6 +2256,23 @@ async def activate_order(order_id: str):
         }}},
     )
     await db.orders.update_one({"id": order_id}, {"$set": {"status": "active"}})
+    # Send receipt email (best-effort, non-blocking failures)
+    try:
+        from emailer import send_email, render_order_receipt
+        u = await db.users.find_one({"id": order["user_id"]}, {"_id": 0, "name": 1, "email": 1})
+        recipient = order.get("email") or (u or {}).get("email")
+        if recipient:
+            plan_label = (PLANS.get(order.get("plan", "")) or {}).get("label", order.get("plan", ""))
+            subj, html = render_order_receipt(
+                (u or {}).get("name") or "",
+                plan_label,
+                int(order.get("amount_eur", 0)),
+                order.get("order_no") or order.get("id", "")[:8],
+                expires.isoformat(),
+            )
+            await send_email(to=recipient, subject=subj, html=html)
+    except Exception as e:
+        logger.warning(f"Order receipt email failed: {e}")
     return {"ok": True}
 
 

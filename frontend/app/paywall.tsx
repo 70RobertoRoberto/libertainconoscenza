@@ -19,6 +19,7 @@ export default function Paywall() {
   const [coupon, setCoupon] = useState("");
   const [couponInfo, setCouponInfo] = useState<{ code: string; percent_off: number } | null>(null);
   const [couponErr, setCouponErr] = useState("");
+  const [email, setEmail] = useState("");
 
   useEffect(() => {
     api<{ plans: Record<string, any> }>("/plans")
@@ -27,17 +28,28 @@ export default function Paywall() {
         setPlan(list[0] || null);
       })
       .catch(() => {});
-    auth.me().then((u: any) => setSub(u?.subscription)).catch(() => {});
+    auth.me().then((u: any) => {
+      setSub(u?.subscription);
+      if (u?.email) setEmail(u.email);
+    }).catch(() => {});
   }, []);
 
   const submit = async () => {
     if (!plan) return;
+    if (!email.trim() || !email.includes("@") || !email.split("@")[1]?.includes(".")) {
+      setMsg("⚠️ Inserisci un'email valida per ricevere la ricevuta d'acquisto");
+      return;
+    }
     setLoading(true);
     setMsg("");
     try {
       const r = await api<any>("/billing/checkout", {
         method: "POST",
-        body: JSON.stringify({ plan: plan.key, coupon_code: couponInfo?.code }),
+        body: JSON.stringify({
+          plan: plan.key,
+          coupon_code: couponInfo?.code,
+          email: email.trim().toLowerCase(),
+        }),
       });
       setMsg(
         r.message ||
@@ -132,6 +144,23 @@ export default function Paywall() {
         ) : null}
 
         <View style={{ marginTop: spacing.xl }}>
+          <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, marginBottom: spacing.sm }}>
+            Email per ricevuta d&apos;acquisto <Text style={{ color: colors.brandPrimary }}>*</Text>
+          </Text>
+          <TextInput
+            testID="paywall-email-input"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="mario.rossi@email.it"
+            placeholderTextColor={colors.muted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.coupon}
+          />
+        </View>
+
+        <View style={{ marginTop: spacing.md }}>
           <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, marginBottom: spacing.sm }}>
             Hai un codice sconto?
           </Text>

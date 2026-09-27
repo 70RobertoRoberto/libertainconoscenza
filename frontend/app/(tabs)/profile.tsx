@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Share, Linking, Switch, Platform, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Share, Linking, Switch, Platform, Alert, TextInput } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
@@ -52,6 +52,34 @@ export default function Profile() {
   const sub = user?.subscription || {};
   const isPremium = sub.status === "premium";
   const isTrial = sub.status === "trial" && (sub.days_remaining ?? 0) > 0;
+
+  const [emailDraft, setEmailDraft] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  useEffect(() => {
+    if (user?.email) setEmailDraft(user.email);
+  }, [user?.email]);
+
+  const saveEmail = async () => {
+    const e = (emailDraft || "").trim().toLowerCase();
+    if (!e || !e.includes("@") || !e.split("@")[1]?.includes(".")) {
+      if (Platform.OS === "web") window.alert("Email non valida");
+      else Alert.alert("Errore", "Email non valida");
+      return;
+    }
+    setSavingEmail(true);
+    try {
+      await api("/me/email", { method: "POST", body: JSON.stringify({ email: e }) });
+      const u: any = await auth.me();
+      setUser(u);
+      if (Platform.OS === "web") window.alert("Email salvata");
+      else Alert.alert("Fatto", "Email salvata");
+    } catch (er: any) {
+      if (Platform.OS === "web") window.alert(er?.message || "-");
+      else Alert.alert("Errore", er?.message || "-");
+    } finally {
+      setSavingEmail(false);
+    }
+  };
 
   const shareReferral = async () => {
     if (!ref?.code) return;
@@ -269,6 +297,31 @@ export default function Profile() {
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>📧  Email</Text>
+        <Muted style={{ marginTop: spacing.sm, fontSize: 12 }}>
+          Riceverai qui ricevute d&apos;acquisto, risposte all&apos;assistenza e certificati.
+        </Muted>
+        <View style={{ height: spacing.md }} />
+        <TextInput
+          testID="profile-email-input"
+          value={emailDraft}
+          onChangeText={setEmailDraft}
+          placeholder="mario.rossi@email.it"
+          placeholderTextColor={colors.muted}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          style={styles.emailInput}
+        />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
+          testID="save-email"
+          label={savingEmail ? "Salvataggio…" : (user?.email ? "Aggiorna email" : "Salva email")}
+          onPress={saveEmail}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>💬  Assistenza</Text>
         <View style={{ height: spacing.md }} />
         <OutlineButton
@@ -280,7 +333,18 @@ export default function Profile() {
 
       <Card style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>🔐  Sicurezza</Text>
+        {user?.last_login_at ? (
+          <Muted style={{ marginTop: spacing.sm, fontSize: 12 }}>
+            {`Ultimo accesso: ${new Date(user.last_login_at).toLocaleString("it-IT")} · ${user?.last_login_device || "Dispositivo sconosciuto"}`}
+          </Muted>
+        ) : null}
         <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-login-history"
+          label="Vedi accessi recenti"
+          onPress={() => router.push("/login-history")}
+        />
+        <View style={{ height: spacing.sm }} />
         <OutlineButton
           testID="go-change-password"
           label="Cambia password"
@@ -367,6 +431,16 @@ const _refStyles = StyleSheet.create({});
 const styles = StyleSheet.create({
   name: { color: colors.onSurface, fontSize: 22, fontWeight: "700", marginTop: spacing.md },
   upgradeTitle: { color: colors.brandPrimary, fontSize: 18, fontWeight: "700" },
+  emailInput: {
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    color: colors.onSurface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 14,
+  },
   sectionTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
   refCodeBox: {
     marginTop: spacing.md,

@@ -57,6 +57,15 @@ export async function api<T = any>(
     } else {
       msg = (data && (data.detail || data.message)) || `Errore ${res.status}`;
     }
+    // Auto-logout on session expired (single-session invalidation) to force
+    // the user back to the login screen.
+    if (
+      res.status === 401 &&
+      typeof msg === "string" &&
+      /sessione scaduta/i.test(msg)
+    ) {
+      await setToken(null);
+    }
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
   return data as T;
@@ -112,10 +121,10 @@ export const auth = {
     await setToken(r.access_token);
     return r.user;
   },
-  async register(phone: string, password: string, name?: string, referral_code?: string) {
+  async register(phone: string, password: string, name?: string, referral_code?: string, email?: string) {
     const r = await api<{ access_token: string; user: any }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ phone, password, name, referral_code }),
+      body: JSON.stringify({ phone, password, name, referral_code, email }),
     });
     await setToken(r.access_token);
     return r.user;
@@ -124,6 +133,7 @@ export const auth = {
     return await api<any>("/auth/me");
   },
   async logout() {
+    try { await api("/auth/logout", { method: "POST" }); } catch {}
     await setToken(null);
   },
   async hasToken() {

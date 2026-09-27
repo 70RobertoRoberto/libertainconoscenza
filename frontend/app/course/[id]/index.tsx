@@ -60,6 +60,7 @@ export default function CourseDetailScreen() {
   const [couponErr, setCouponErr] = useState("");
   const [applying, setApplying] = useState(false);
   const [withdrawalConsent, setWithdrawalConsent] = useState(false);
+  const [purchaseEmail, setPurchaseEmail] = useState("");
 
   const applyCoupon = async () => {
     setCouponErr("");
@@ -234,6 +235,22 @@ export default function CourseDetailScreen() {
           </>
         ) : isPremium ? (
           <>
+            <View style={{ marginBottom: spacing.sm }}>
+              <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginBottom: 6 }}>
+                Email per ricevuta d&apos;acquisto <Text style={{ color: colors.brandPrimary }}>*</Text>
+              </Text>
+              <TextInput
+                testID="course-purchase-email"
+                value={purchaseEmail}
+                onChangeText={setPurchaseEmail}
+                placeholder="mario.rossi@email.it"
+                placeholderTextColor={colors.muted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.couponInput}
+              />
+            </View>
             <Pressable
               testID="withdrawal-consent"
               onPress={() => setWithdrawalConsent((v) => !v)}

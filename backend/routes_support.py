@@ -89,6 +89,15 @@ def build_support_router(db, current_user, require_admin) -> APIRouter:
         }
         await db.support_tickets.insert_one(doc)
         doc.pop("_id", None)
+        # Best-effort email confirmation
+        try:
+            from emailer import send_email, render_ticket_created
+            recipient = user.get("email")
+            if recipient:
+                subj, html = render_ticket_created(user.get("name") or "", ticket_no, doc["subject"], inp.message.strip())
+                await send_email(to=recipient, subject=subj, html=html)
+        except Exception:
+            pass
         return doc
 
     @router.get("/me/support/tickets", dependencies=[Depends(current_user)])
@@ -145,6 +154,21 @@ def build_support_router(db, current_user, require_admin) -> APIRouter:
             {"id": ticket_id},
             {"$push": {"messages": msg}, "$set": {"status": new_status, "updated_at": _now()}},
         )
+        # Best-effort email to user
+        try:
+            from emailer import send_email, render_ticket_admin_reply
+            u = await db.users.find_one({"id": t.get("user_id")}, {"_id": 0, "name": 1, "email": 1})
+            recipient = (u or {}).get("email")
+            if recipient:
+                subj, html = render_ticket_admin_reply(
+                    (u or {}).get("name") or "",
+                    t.get("ticket_no", ""),
+                    t.get("subject", ""),
+                    inp.message.strip(),
+                )
+                await send_email(to=recipient, subject=subj, html=html)
+        except Exception:
+            pass
         return {"ok": True}
 
     @router.post("/admin/support/tickets/{ticket_id}/close", dependencies=[Depends(require_admin)])

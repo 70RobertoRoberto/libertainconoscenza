@@ -654,13 +654,15 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
         })
         update = {"quiz_attempts": used + 1}
         certificate_id = enrollment.get("certificate_id")
+        _course_title_for_email = None
         if passed:
             certificate_id = certificate_id or str(uuid.uuid4())
+            _course_title_for_email = (await db.courses.find_one({"id": course_id}) or {}).get("title", "Corso")
             await db.certificates.insert_one({
                 "id": certificate_id,
                 "user_id": user["id"],
                 "course_id": course_id,
-                "course_title": (await db.courses.find_one({"id": course_id}) or {}).get("title", "Corso"),
+                "course_title": _course_title_for_email,
                 "issued_at": _now(),
                 "score": score,
             })
@@ -670,6 +672,18 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             {"course_id": course_id, "user_id": user["id"]},
             {"$set": update},
         )
+        # Send certificate email (best-effort)
+        if passed and user.get("email") and _course_title_for_email:
+            try:
+                from emailer import send_email, render_certificate_issued
+                subj, html = render_certificate_issued(
+                    user.get("name") or "",
+                    _course_title_for_email,
+                    int(score * 100),
+                )
+                await send_email(to=user["email"], subject=subj, html=html)
+            except Exception:
+                pass
         return {
             "score": score,
             "passed": passed,

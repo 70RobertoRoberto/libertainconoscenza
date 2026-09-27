@@ -26,6 +26,7 @@ export default function Register() {
   const { t, lang, setLang } = useLang();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [referral, setReferral] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -48,10 +49,20 @@ export default function Register() {
     if (name.trim().length < 2) return setErr("Il nome deve avere almeno 2 caratteri");
     if (!phone || !password) return setErr(t("err_required"));
     if (password.length < 6) return setErr(t("err_min"));
+    const trimmedEmail = email.trim().toLowerCase();
+    if (trimmedEmail && (!trimmedEmail.includes("@") || !trimmedEmail.split("@")[1]?.includes("."))) {
+      return setErr("Email non valida");
+    }
     if (!acceptedTerms) return setErr("Devi accettare i termini e la privacy per continuare");
     setLoading(true);
     try {
-      const user = await auth.register(normalizePhone(phone), password, name.trim(), referral.trim() || undefined);
+      const user = await auth.register(
+        normalizePhone(phone),
+        password,
+        name.trim(),
+        referral.trim() || undefined,
+        trimmedEmail || undefined,
+      );
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
     } catch (e: any) {
@@ -126,6 +137,22 @@ export default function Register() {
           />
           <Muted style={styles.helperTxt}>
             Includi il prefisso internazionale +39 · Gli spazi sono facoltativi
+          </Muted>
+
+          <Text style={[styles.label, { marginTop: spacing.lg }]}>Email (facoltativa)</Text>
+          <TextInput
+            testID="register-email-input"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="mario.rossi@email.it"
+            placeholderTextColor={colors.muted}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+          />
+          <Muted style={styles.helperTxt}>
+            Ci serve per inviarti ricevute d&apos;acquisto, risposte all&apos;assistenza e certificati.
           </Muted>
 
           <Text style={[styles.label, { marginTop: spacing.lg }]}>{t("password_hint")}</Text>
