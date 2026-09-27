@@ -8,9 +8,10 @@ import {
   StyleSheet,
   ActivityIndicator,
   Image,
-  Alert,
   Modal,
   Switch,
+  Platform,
+  Alert,
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
@@ -18,6 +19,29 @@ import * as FileSystem from "expo-file-system/legacy";
 import { colors, spacing, radius } from "@/src/theme";
 import { api, adminUpload } from "@/src/api";
 import { RichEditor, RichViewer } from "@/src/RichEditor";
+
+/**
+ * Cross-platform alert. On web, RN Alert.alert is silent → use window.alert.
+ */
+function toast(title: string, message?: string) {
+  const text = message ? `${title}\n\n${message}` : title;
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.alert(text);
+    return;
+  }
+  Alert.alert(title, message);
+}
+
+function confirmDelete(title: string, message: string, onYes: () => void) {
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined" && window.confirm(`${title}\n\n${message}`)) onYes();
+    return;
+  }
+  Alert.alert(title, message, [
+    { text: "Annulla", style: "cancel" },
+    { text: "Elimina", style: "destructive", onPress: onYes },
+  ]);
+}
 
 /**
  * Admin "Corsi" section.
@@ -128,8 +152,10 @@ function CreateCourseForm({ onCreated }: { onCreated: (id: string) => void }) {
   const areas = areasData?.items || [];
 
   const pickCover = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) { Alert.alert("Permesso negato"); return; }
+    if (Platform.OS !== "web") {
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) { toast("Permesso negato"); return; }
+    }
     const r = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.85,
@@ -138,22 +164,31 @@ function CreateCourseForm({ onCreated }: { onCreated: (id: string) => void }) {
     const asset = r.assets[0];
     setUploading(true);
     try {
-      const info = await FileSystem.getInfoAsync(asset.uri);
-      if (info.exists && (info.size || 0) > 8 * 1024 * 1024) {
-        Alert.alert("Immagine troppo grande", "Massimo 8 MB.");
-        return;
+      // Size check only on native — on web, blob:// URIs don't play well with getInfoAsync.
+      if (Platform.OS !== "web") {
+        try {
+          const info = await FileSystem.getInfoAsync(asset.uri);
+          if (info.exists && (info.size || 0) > 8 * 1024 * 1024) {
+            toast("Immagine troppo grande", "Massimo 8 MB.");
+            return;
+          }
+        } catch { /* ignore size probe failures */ }
       }
-      const up = await adminUpload(asset.uri, asset.mimeType || "image/jpeg", "cover.jpg");
+      const up = await adminUpload(
+        asset.uri,
+        asset.mimeType || "image/jpeg",
+        asset.fileName || "cover.jpg",
+      );
       setCoverUrl(up.url);
     } catch (e: any) {
-      Alert.alert("Errore upload", String(e?.message || e));
+      toast("Errore upload", String(e?.message || e));
     } finally { setUploading(false); }
   };
 
   const save = async () => {
-    if (!title.trim()) return Alert.alert("Titolo obbligatorio");
-    if (!coverUrl) return Alert.alert("Copertina obbligatoria");
-    if (kind === "premium" && (!price || Number(price) <= 0)) return Alert.alert("Prezzo obbligatorio per corsi Premium");
+    if (!title.trim()) return toast("Titolo obbligatorio");
+    if (!coverUrl) return toast("Copertina obbligatoria");
+    if (kind === "premium" && (!price || Number(price) <= 0)) return toast("Prezzo obbligatorio per corsi Premium");
     setSaving(true);
     try {
       const res = await api<Course>("/admin/courses", {
@@ -170,10 +205,10 @@ function CreateCourseForm({ onCreated }: { onCreated: (id: string) => void }) {
       });
       qc.invalidateQueries({ queryKey: ["c-list"] });
       setTitle(""); setCoverUrl(""); setDescHtml(""); setPrice(""); setAreaId(null); setKind("base");
-      Alert.alert("Corso creato", "Ora puoi aggiungere argomenti e quiz.");
+      toast("Corso creato", "Ora puoi aggiungere argomenti e quiz.");
       onCreated(res.id);
     } catch (e: any) {
-      Alert.alert("Errore", e?.message || "Impossibile creare");
+      toast("Errore", e?.message || "Impossibile creare");
     } finally { setSaving(false); }
   };
 
@@ -188,13 +223,30 @@ function CreateCourseForm({ onCreated }: { onCreated: (id: string) => void }) {
       {coverUrl ? (
         <View style={{ marginBottom: spacing.md }}>
           <Image source={{ uri: coverUrl }} style={s.cover} />
+          <View style={s.coverBadge}>
+            <Text style={s.coverBadgeTxt}>✓ Immagine caricata</Text>
+          </View>
           <Pressable onPress={() => setCoverUrl("")} style={s.coverRemove}>
             <Text style={{ color: "#fff", fontWeight: "700" }}>×</Text>
+          </Pressable>
+          <Pressable onPress={pickCover} style={s.coverReplace} disabled={uploading}>
+            {uploading ? (
+              <ActivityIndicator color={colors.brandPrimary} />
+            ) : (
+              <Text style={s.uploadTxt}>Sostituisci copertina</Text>
+            )}
           </Pressable>
         </View>
       ) : (
         <Pressable onPress={pickCover} style={s.upload} disabled={uploading}>
-          {uploading ? <ActivityIndicator color={colors.brandPrimary} /> : <Text style={s.uploadTxt}>📷  Scegli copertina</Text>}
+          {uploading ? (
+            <View style={{ alignItems: "center" }}>
+              <ActivityIndicator color={colors.brandPrimary} />
+              <Text style={[s.uploadTxt, { marginTop: 6 }]}>Caricamento in corso…</Text>
+            </View>
+          ) : (
+            <Text style={s.uploadTxt}>📷  Scegli copertina</Text>
+          )}
         </Pressable>
       )}
 
@@ -288,21 +340,16 @@ function CourseList({ active, onOpen }: { active: boolean; onOpen: (id: string) 
         body: JSON.stringify({ is_active: !c.is_active }),
       });
       qc.invalidateQueries({ queryKey: ["c-list"] });
-    } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    } catch (e: any) { toast("Errore", e?.message || "-"); }
   };
 
   const del = async (c: Course) => {
-    Alert.alert("Eliminare?", `"${c.title}" verrà eliminato.`, [
-      { text: "Annulla", style: "cancel" },
-      {
-        text: "Elimina", style: "destructive", onPress: async () => {
-          try {
-            await api(`/admin/courses/${c.id}`, { method: "DELETE" });
-            qc.invalidateQueries({ queryKey: ["c-list"] });
-          } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
-        }
-      }
-    ]);
+    confirmDelete("Eliminare?", `"${c.title}" verrà eliminato.`, async () => {
+      try {
+        await api(`/admin/courses/${c.id}`, { method: "DELETE" });
+        qc.invalidateQueries({ queryKey: ["c-list"] });
+      } catch (e: any) { toast("Errore", e?.message || "-"); }
+    });
   };
 
   if (isLoading) return <ActivityIndicator color={colors.brandPrimary} style={{ marginTop: 20 }} />;
@@ -353,11 +400,11 @@ function AreasModal({ onClose }: { onClose: () => void }) {
     try {
       await api("/admin/course-areas", { method: "POST", body: JSON.stringify({ name: newName.trim(), order: 0 }) });
       setNewName(""); qc.invalidateQueries({ queryKey: ["c-areas"] });
-    } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    } catch (e: any) { toast("Errore", e?.message || "-"); }
   };
   const del = async (id: string) => {
     try { await api(`/admin/course-areas/${id}`, { method: "DELETE" }); qc.invalidateQueries({ queryKey: ["c-areas"] }); }
-    catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    catch (e: any) { toast("Errore", e?.message || "-"); }
   };
 
   return (
@@ -539,7 +586,7 @@ function TopicEditor({
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!title.trim()) return Alert.alert("Titolo obbligatorio");
+    if (!title.trim()) return toast("Titolo obbligatorio");
     setSaving(true);
     try {
       const body = JSON.stringify({ title: title.trim(), kind, content_html: contentHtml, order: topic?.order || 0 });
@@ -549,19 +596,16 @@ function TopicEditor({
         await api(`/admin/topics/${topic!.id}`, { method: "PATCH", body });
       }
       onSaved();
-    } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    } catch (e: any) { toast("Errore", e?.message || "-"); }
     finally { setSaving(false); }
   };
 
   const del = async () => {
     if (!topic) return;
-    Alert.alert("Eliminare l'argomento?", "", [
-      { text: "Annulla", style: "cancel" },
-      { text: "Elimina", style: "destructive", onPress: async () => {
-        try { await api(`/admin/topics/${topic.id}`, { method: "DELETE" }); onSaved(); }
-        catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
-      }},
-    ]);
+    confirmDelete("Eliminare l'argomento?", "L'operazione è irreversibile.", async () => {
+      try { await api(`/admin/topics/${topic.id}`, { method: "DELETE" }); onSaved(); }
+      catch (e: any) { toast("Errore", e?.message || "-"); }
+    });
   };
 
   return (
@@ -648,10 +692,10 @@ function QuizEditor({
   const save = async () => {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
-      if (!q.text.trim()) return Alert.alert(`Domanda ${i + 1}: testo mancante`);
+      if (!q.text.trim()) return toast(`Domanda ${i + 1}: testo mancante`);
       const filled = q.answers.filter(a => a.text.trim());
-      if (filled.length < 2) return Alert.alert(`Domanda ${i + 1}: servono almeno 2 risposte`);
-      if (!q.answers.some(a => a.is_correct && a.text.trim())) return Alert.alert(`Domanda ${i + 1}: manca risposta corretta`);
+      if (filled.length < 2) return toast(`Domanda ${i + 1}: servono almeno 2 risposte`);
+      if (!q.answers.some(a => a.is_correct && a.text.trim())) return toast(`Domanda ${i + 1}: manca risposta corretta`);
     }
     setSaving(true);
     try {
@@ -662,7 +706,7 @@ function QuizEditor({
       };
       await api(`/admin/courses/${courseId}/quiz`, { method: "PUT", body: JSON.stringify(payload) });
       onSaved();
-    } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    } catch (e: any) { toast("Errore", e?.message || "-"); }
     finally { setSaving(false); }
   };
 
@@ -716,9 +760,9 @@ function PromoEditor({ course, onClose, onSaved }: { course: Course; onClose: ()
 
   const save = async () => {
     if (active) {
-      if (!pricePromo || Number(pricePromo) <= 0) return Alert.alert("Prezzo promo obbligatorio");
-      if (!days || Number(days) <= 0) return Alert.alert("Durata (giorni) obbligatoria");
-      if (Number(pricePromo) >= course.price) return Alert.alert("Il prezzo promo dev'essere < del normale");
+      if (!pricePromo || Number(pricePromo) <= 0) return toast("Prezzo promo obbligatorio");
+      if (!days || Number(days) <= 0) return toast("Durata (giorni) obbligatoria");
+      if (Number(pricePromo) >= course.price) return toast("Il prezzo promo dev'essere < del normale");
     }
     setSaving(true);
     try {
@@ -733,7 +777,7 @@ function PromoEditor({ course, onClose, onSaved }: { course: Course; onClose: ()
         }),
       });
       onSaved();
-    } catch (e: any) { Alert.alert("Errore", e?.message || "-"); }
+    } catch (e: any) { toast("Errore", e?.message || "-"); }
     finally { setSaving(false); }
   };
 
@@ -780,6 +824,9 @@ const s = StyleSheet.create({
   input: { backgroundColor: colors.surfaceSecondary, borderColor: colors.border, borderWidth: 1, borderRadius: radius.md, padding: 12, color: colors.onSurface, marginBottom: spacing.sm, fontSize: 15 },
   cover: { width: "100%", height: 180, borderRadius: radius.md, backgroundColor: colors.surfaceSecondary },
   coverRemove: { position: "absolute", top: 8, right: 8, width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,0,0,0.6)", alignItems: "center", justifyContent: "center" },
+  coverBadge: { position: "absolute", top: 8, left: 8, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
+  coverBadgeTxt: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  coverReplace: { marginTop: 8, paddingVertical: 10, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", alignItems: "center" },
   upload: { padding: spacing.lg, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed", alignItems: "center", marginBottom: spacing.md },
   uploadTxt: { color: colors.brandPrimary, fontSize: 14 },
   editorLauncher: { padding: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary, marginBottom: 8 },
