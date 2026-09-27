@@ -34,7 +34,7 @@ const CATEGORIES = [
   "Crescita personale", "Medicina Integrata", "Filosofia", "Video",
 ];
 
-type Section = "stats" | "articles" | "media" | "courses" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets";
+type Section = "stats" | "articles" | "media" | "courses" | "youtube" | "ads" | "coupons" | "comments" | "messages" | "users" | "orders" | "resets" | "support";
 
 export default function Admin() {
   const router = useRouter();
@@ -53,6 +53,7 @@ export default function Admin() {
     { key: "messages", label: "Messaggi" },
     { key: "users", label: "Utenti" },
     { key: "orders", label: "Ordini" },
+    { key: "support", label: "Assistenza" },
     { key: "resets", label: "Reset PW" },
   ];
 
@@ -101,6 +102,7 @@ export default function Admin() {
         {section === "messages" && <MessagesSection />}
         {section === "users" && <UsersSection />}
         {section === "orders" && <OrdersSection />}
+        {section === "support" && <SupportSection />}
         {section === "resets" && <ResetsSection />}
       </KeyboardAvoidingView>
     </View>
@@ -1950,3 +1952,154 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
 });
+
+/* ─────── Support (help tickets) admin section ─────── */
+type SupportTicket = {
+  id: string;
+  ticket_no: string;
+  user_phone?: string;
+  user_name?: string;
+  subject: string;
+  category: string;
+  status: "open" | "waiting_user" | "resolved" | "closed";
+  messages: { author: "user" | "admin"; text: string; at: string }[];
+  updated_at: string;
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  open: "🟠 Aperto",
+  waiting_user: "✉️ In attesa utente",
+  resolved: "✅ Risolto",
+  closed: "🔒 Chiuso",
+};
+
+function SupportSection() {
+  const insets = useSafeAreaInsets();
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [open, setOpen] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState<Record<string, string>>({});
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-support", statusFilter],
+    queryFn: () => api<{ items: SupportTicket[] }>(`/admin/support/tickets${statusFilter ? `?status=${statusFilter}` : ""}`),
+    refetchOnMount: "always",
+  });
+  const items = data?.items || [];
+
+  const send = async (t: SupportTicket, newStatus?: string) => {
+    const text = (replyDraft[t.id] || "").trim();
+    if (!text && !newStatus) return;
+    try {
+      if (text) {
+        await api(`/admin/support/tickets/${t.id}/reply`, {
+          method: "POST",
+          body: JSON.stringify({ message: text, new_status: newStatus || "waiting_user" }),
+        });
+      } else if (newStatus === "resolved" || newStatus === "closed") {
+        await api(`/admin/support/tickets/${t.id}/${newStatus === "closed" ? "close" : "reply"}`, {
+          method: "POST",
+          body: newStatus === "closed" ? undefined : JSON.stringify({ message: "Risolto.", new_status: "resolved" }),
+        });
+      }
+      setReplyDraft({ ...replyDraft, [t.id]: "" });
+      qc.invalidateQueries({ queryKey: ["admin-support"] });
+    } catch (e: any) {
+      if (Platform.OS === "web") window.alert(e?.message || "-");
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: insets.bottom + spacing.xxxl }}>
+      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", marginBottom: spacing.md }}>
+        {[
+          { k: "", l: "Tutti" },
+          { k: "open", l: "Aperti" },
+          { k: "waiting_user", l: "In attesa" },
+          { k: "resolved", l: "Risolti" },
+          { k: "closed", l: "Chiusi" },
+        ].map((f) => {
+          const active = statusFilter === f.k;
+          return (
+            <Pressable
+              key={f.k || "all"}
+              onPress={() => setStatusFilter(f.k)}
+              style={[styles.chip, active && styles.chipActive]}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.l}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {isLoading ? (
+        <ActivityIndicator color={colors.brandPrimary} />
+      ) : items.length === 0 ? (
+        <Muted>Nessun ticket in questa categoria.</Muted>
+      ) : (
+        <View style={{ gap: spacing.sm }}>
+          {items.map((t) => {
+            const isOpen = open === t.id;
+            return (
+              <View key={t.id} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, padding: spacing.md }}>
+                <Pressable onPress={() => setOpen(isOpen ? null : t.id)}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                    <Text style={{ color: colors.brandPrimary, fontWeight: "800", fontSize: 12 }}>#{t.ticket_no}</Text>
+                    <Text style={{ color: colors.onSurfaceTertiary, fontSize: 11, fontWeight: "700" }}>{STATUS_LABEL[t.status] || t.status}</Text>
+                  </View>
+                  <Text style={{ color: colors.onSurface, fontWeight: "700", marginTop: 4 }} numberOfLines={2}>{t.subject}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>
+                    {t.category} · {t.user_name || t.user_phone} · {new Date(t.updated_at).toLocaleString("it-IT")}
+                  </Text>
+                </Pressable>
+                {isOpen ? (
+                  <View style={{ marginTop: spacing.md }}>
+                    {t.messages.map((m, i) => (
+                      <View key={i} style={{
+                        borderRadius: radius.md, padding: 10, marginTop: 6,
+                        backgroundColor: m.author === "admin" ? colors.brandTertiary : colors.surfaceTertiary,
+                        borderWidth: m.author === "admin" ? 1 : 0,
+                        borderColor: colors.brandPrimary,
+                        alignSelf: m.author === "admin" ? "flex-start" : "flex-end",
+                        maxWidth: "88%",
+                      }}>
+                        <Text style={{ color: colors.brandPrimary, fontSize: 10, fontWeight: "800" }}>
+                          {m.author === "admin" ? "Assistenza" : (t.user_name || "Utente")}
+                        </Text>
+                        <Text style={{ color: colors.onSurface, fontSize: 13, marginTop: 2 }}>{m.text}</Text>
+                        <Text style={{ color: colors.muted, fontSize: 10, marginTop: 4 }}>{new Date(m.at).toLocaleString("it-IT")}</Text>
+                      </View>
+                    ))}
+                    {t.status !== "closed" ? (
+                      <>
+                        <TextInput
+                          value={replyDraft[t.id] || ""}
+                          onChangeText={(v) => setReplyDraft({ ...replyDraft, [t.id]: v })}
+                          placeholder="Scrivi risposta…"
+                          placeholderTextColor={colors.muted}
+                          style={[styles.input, { marginTop: spacing.md, minHeight: 60 }]}
+                          multiline
+                        />
+                        <View style={{ flexDirection: "row", gap: 6, marginTop: spacing.sm, flexWrap: "wrap" }}>
+                          <Pressable onPress={() => send(t, "waiting_user")} style={[styles.chip, styles.chipActive]}>
+                            <Text style={styles.chipTextActive}>Rispondi</Text>
+                          </Pressable>
+                          <Pressable onPress={() => send(t, "resolved")} style={styles.chip}>
+                            <Text style={styles.chipText}>Marca risolto</Text>
+                          </Pressable>
+                          <Pressable onPress={() => send(t, "closed")} style={styles.chip}>
+                            <Text style={styles.chipText}>Chiudi</Text>
+                          </Pressable>
+                        </View>
+                      </>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </ScrollView>
+  );
+}

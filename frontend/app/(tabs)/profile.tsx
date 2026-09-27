@@ -153,6 +153,50 @@ export default function Profile() {
         />
       </Card>
 
+      {isPremium && sub?.expires_at ? (
+        <Card style={{ marginBottom: spacing.lg }}>
+          <Text style={styles.sectionTitle}>👑  Abbonamento Premium</Text>
+          <Muted style={{ marginTop: spacing.sm }}>
+            {`Scadenza: ${new Date(sub.expires_at).toLocaleDateString("it-IT", { day:"2-digit", month:"long", year:"numeric" })}`}
+            {typeof sub.days_remaining === "number" ? ` · ${sub.days_remaining} giorni rimanenti` : ""}
+          </Muted>
+          <Muted style={{ marginTop: 4, fontSize: 12 }}>
+            {sub.auto_renew
+              ? "Rinnovo automatico ATTIVO — verrà rinnovato a 12€/anno."
+              : "Rinnovo automatico DISATTIVATO — l'accesso terminerà alla scadenza."}
+          </Muted>
+          <View style={{ height: spacing.md }} />
+          <OutlineButton
+            testID={sub.auto_renew ? "cancel-renewal" : "reactivate-renewal"}
+            label={sub.auto_renew ? "Disdici rinnovo automatico" : "Riattiva rinnovo automatico"}
+            onPress={async () => {
+              const endpoint = sub.auto_renew ? "/me/subscription/cancel-renewal" : "/me/subscription/reactivate-renewal";
+              const confirmMsg = sub.auto_renew
+                ? "Confermi la disdetta del rinnovo? Manterrai l'accesso fino alla scadenza."
+                : "Confermi la riattivazione del rinnovo automatico?";
+              const proceed = Platform.OS === "web"
+                ? window.confirm(confirmMsg)
+                : await new Promise<boolean>((res) =>
+                    Alert.alert(sub.auto_renew ? "Disdici rinnovo" : "Riattiva rinnovo", confirmMsg, [
+                      { text: "Annulla", style: "cancel", onPress: () => res(false) },
+                      { text: "Conferma", onPress: () => res(true) },
+                    ]));
+              if (!proceed) return;
+              try {
+                const r: any = await api(endpoint, { method: "POST" });
+                if (Platform.OS === "web") window.alert(r?.message || "Fatto");
+                else Alert.alert("Fatto", r?.message || "-");
+                const u: any = await auth.me();
+                setUser(u);
+              } catch (e: any) {
+                if (Platform.OS === "web") window.alert(e?.message || "-");
+                else Alert.alert("Errore", e?.message || "-");
+              }
+            }}
+          />
+        </Card>
+      ) : null}
+
       <Card style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>🎵  Le mie playlist</Text>
         <View style={{ height: spacing.md }} />
@@ -221,6 +265,16 @@ export default function Profile() {
           testID="review-cookies"
           label="Rivedi consenso cookie"
           onPress={() => router.push("/cookie-preferences")}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>💬  Assistenza</Text>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="go-help"
+          label="Apri richiesta di assistenza"
+          onPress={() => router.push("/help")}
         />
       </Card>
 

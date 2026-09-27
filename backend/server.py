@@ -337,6 +337,8 @@ def subscription_view(u: dict) -> dict:
         "expires_at": expires_at,
         "days_remaining": days_remaining,
         "active": active,
+        "auto_renew": bool(sub.get("auto_renew", status == "premium")),
+        "cancelled_at": sub.get("cancelled_at"),
     }
 
 
@@ -372,6 +374,33 @@ async def startup():
     await db.users.create_index("referral_code", unique=True, sparse=True)
     await db.comments.create_index([("content_id", 1), ("created_at", -1)])
     await db.completions.create_index([("user_id", 1), ("content_id", 1)], unique=True)
+    await db.course_areas.create_index("slug", unique=True)
+    await db.support_tickets.create_index("id", unique=True)
+    await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
+
+    # Preseed default course thematic areas (idempotent)
+    _default_areas = [
+        {"slug": "biofisica-quantistica", "name": "Biofisica Quantistica", "order": 1},
+        {"slug": "meditazione", "name": "Meditazione", "order": 2},
+        {"slug": "naturopatia", "name": "Naturopatia", "order": 3},
+        {"slug": "medicina-integrata", "name": "Medicina Integrata", "order": 4},
+        {"slug": "crescita-personale", "name": "Crescita Personale", "order": 5},
+        {"slug": "discipline-orientali", "name": "Discipline Orientali", "order": 6},
+        {"slug": "filosofia", "name": "Filosofia", "order": 7},
+        {"slug": "psicologia", "name": "Psicologia", "order": 8},
+        {"slug": "guarigione-energetica", "name": "Guarigione Energetica", "order": 9},
+        {"slug": "tradizioni-esoteriche", "name": "Tradizioni Esoteriche", "order": 10},
+        {"slug": "nutrizione", "name": "Nutrizione", "order": 11},
+    ]
+    for a in _default_areas:
+        if not await db.course_areas.find_one({"slug": a["slug"]}):
+            await db.course_areas.insert_one({
+                "id": str(uuid.uuid4()),
+                "slug": a["slug"],
+                "name": a["name"],
+                "order": a["order"],
+                "created_at": now_iso(),
+            })
 
     # Init object storage (best-effort)
     try:
@@ -974,6 +1003,28 @@ async def login(inp: LoginIn):
     if not u or not check_password(inp.password, u["password_hash"]):
         raise HTTPException(401, "Credenziali non valide")
     return TokenOut(access_token=make_token(u["id"]), user=to_public_user(u))
+
+
+@api.post("/me/subscription/cancel-renewal")
+async def cancel_renewal(user: dict = Depends(current_user)):
+    sub = user.get("subscription") or {}
+    if sub.get("status") != "premium":
+        raise HTTPException(400, "Nessun abbonamento attivo da disdire")
+    if not sub.get("expires_at"):
+        raise HTTPException(400, "Data di scadenza non impostata")
+    new_sub = {**sub, "auto_renew": False, "cancelled_at": now_iso()}
+    await db.users.update_one({"id": user["id"]}, {"$set": {"subscription": new_sub}})
+    return {"ok": True, "message": "Rinnovo automatico disattivato. L'accesso Premium resta valido fino alla scadenza."}
+
+
+@api.post("/me/subscription/reactivate-renewal")
+async def reactivate_renewal(user: dict = Depends(current_user)):
+    sub = user.get("subscription") or {}
+    if sub.get("status") != "premium":
+        raise HTTPException(400, "Nessun abbonamento attivo")
+    new_sub = {**sub, "auto_renew": True, "cancelled_at": None}
+    await db.users.update_one({"id": user["id"]}, {"$set": {"subscription": new_sub}})
+    return {"ok": True, "message": "Rinnovo automatico riattivato."}
 
 
 @api.get("/auth/me")
@@ -2024,6 +2075,8 @@ async def activate_order(order_id: str):
             "status": "premium",
             "plan": order["plan"],
             "expires_at": expires.isoformat(),
+            "auto_renew": True,
+            "activated_at": now_iso(),
         }}},
     )
     await db.orders.update_one({"id": order_id}, {"$set": {"status": "active"}})
@@ -2551,6 +2604,10 @@ app.include_router(api)
 # Corsi (courses) router — separate module.
 from routes_courses import build_courses_router  # noqa: E402
 app.include_router(build_courses_router(db, current_user, require_admin))
+
+# Support (help tickets) router — separate module.
+from routes_support import build_support_router  # noqa: E402
+app.include_router(build_support_router(db, current_user, require_admin))
 
 app.add_middleware(
     CORSMiddleware,
