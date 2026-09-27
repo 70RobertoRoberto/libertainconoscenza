@@ -162,6 +162,12 @@ export default function Profile() {
         />
         <View style={{ height: spacing.sm }} />
         <OutlineButton
+          testID="go-cookies"
+          label="Cookie Policy"
+          onPress={() => router.push("/cookies")}
+        />
+        <View style={{ height: spacing.sm }} />
+        <OutlineButton
           testID="go-disclaimer"
           label="Disclaimer"
           onPress={() => router.push("/disclaimer")}
