@@ -297,9 +297,23 @@ export default function Profile() {
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
-        <Text style={styles.sectionTitle}>📧  Email</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Text style={styles.sectionTitle}>📧  Email</Text>
+          {user?.email ? (
+            user.email_verified ? (
+              <View style={styles.badgeOk}>
+                <Text style={styles.badgeOkTxt}>✓ Verificata</Text>
+              </View>
+            ) : (
+              <View style={styles.badgeWarn}>
+                <Text style={styles.badgeWarnTxt}>Da verificare</Text>
+              </View>
+            )
+          ) : null}
+        </View>
         <Muted style={{ marginTop: spacing.sm, fontSize: 12 }}>
           Riceverai qui ricevute d&apos;acquisto, risposte all&apos;assistenza e certificati.
+          {user?.email && !user.email_verified ? " Puoi continuare a usare l'app senza attendere: la verifica arriva quando clicchi sul link." : ""}
         </Muted>
         <View style={{ height: spacing.md }} />
         <TextInput
@@ -319,6 +333,25 @@ export default function Profile() {
           label={savingEmail ? "Salvataggio…" : (user?.email ? "Aggiorna email" : "Salva email")}
           onPress={saveEmail}
         />
+        {user?.email && !user.email_verified ? (
+          <>
+            <View style={{ height: spacing.sm }} />
+            <OutlineButton
+              testID="resend-verification"
+              label="Rinvia link di verifica"
+              onPress={async () => {
+                try {
+                  const r: any = await api("/me/email/resend-verification", { method: "POST" });
+                  if (Platform.OS === "web") window.alert(r?.message || "Email inviata");
+                  else Alert.alert("Fatto", r?.message || "Email inviata");
+                } catch (er: any) {
+                  if (Platform.OS === "web") window.alert(er?.message || "-");
+                  else Alert.alert("Errore", er?.message || "-");
+                }
+              }}
+            />
+          </>
+        ) : null}
       </Card>
 
       <Card style={{ marginBottom: spacing.lg }}>
@@ -441,6 +474,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 14,
   },
+  badgeOk: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: "#22c55e22",
+  },
+  badgeOkTxt: { color: "#22c55e", fontSize: 10, fontWeight: "800" },
+  badgeWarn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandTertiary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  badgeWarnTxt: { color: colors.brandPrimary, fontSize: 10, fontWeight: "800" },
   sectionTitle: { color: colors.onSurface, fontSize: 16, fontWeight: "700" },
   refCodeBox: {
     marginTop: spacing.md,

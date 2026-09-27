@@ -320,6 +320,7 @@ def to_public_user(u: dict) -> dict:
         "id": u["id"],
         "phone": u["phone"],
         "email": u.get("email"),
+        "email_verified": bool(u.get("email_verified", False)),
         "name": u.get("name"),
         "is_admin": u.get("is_admin", False),
         "subscription": subscription_view(u),
@@ -396,8 +397,14 @@ async def startup():
     await db.course_areas.create_index("slug", unique=True)
     await db.support_tickets.create_index("id", unique=True)
     await db.support_tickets.create_index([("user_id", 1), ("created_at", -1)])
-    await db.users.create_index("email", unique=True, sparse=True)
+    await db.users.create_index(
+        "email",
+        unique=True,
+        partialFilterExpression={"email": {"$type": "string"}},
+    )
     await db.login_history.create_index([("user_id", 1), ("at", -1)])
+    await db.email_verifications.create_index("token", unique=True)
+    await db.email_verifications.create_index([("user_id", 1), ("created_at", -1)])
 
     # Preseed default course thematic areas (idempotent)
     _default_areas = [
@@ -1017,7 +1024,7 @@ async def register(inp: RegisterIn, request: Request):
     phone = normalize_phone(inp.phone)
     if await db.users.find_one({"phone": phone}):
         raise HTTPException(409, "Numero già registrato")
-    # Optional email; if provided must be unique across non-admin users
+    # Optional email; if provided must be unique
     email = None
     if inp.email:
         e = inp.email.strip().lower()
@@ -1169,8 +1176,88 @@ async def set_my_email(inp: SetEmailIn, user: dict = Depends(current_user)):
     existing = await db.users.find_one({"email": e, "id": {"$ne": user["id"]}})
     if existing:
         raise HTTPException(409, "Questa email è già associata a un altro account")
-    await db.users.update_one({"id": user["id"]}, {"$set": {"email": e}})
-    return {"ok": True, "email": e}
+    prev = (user.get("email") or "").lower()
+    changed = (e != prev)
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"email": e, **({"email_verified": False} if changed else {})}},
+    )
+    # Send verification link (best-effort, only if changed / not yet verified)
+    if changed or not user.get("email_verified"):
+        try:
+            token = str(uuid.uuid4())
+            expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+            await db.email_verifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "token": token,
+                "user_id": user["id"],
+                "email": e,
+                "created_at": now_iso(),
+                "expires_at": expires,
+                "used_at": None,
+            })
+            base_url = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("APP_PUBLIC_URL") or "https://libertaconoscenza.emergent.host"
+            verify_url = f"{base_url.rstrip('/')}/verify-email?token={token}"
+            from emailer import send_email, render_email_verification
+            subj, html = render_email_verification(user.get("name") or "", verify_url)
+            await send_email(to=e, subject=subj, html=html)
+        except Exception as ex:
+            logger.warning(f"Verification email failed: {ex}")
+    return {"ok": True, "email": e, "email_verified": False if changed else bool(user.get("email_verified"))}
+
+
+@api.post("/me/email/resend-verification")
+async def resend_email_verification(user: dict = Depends(current_user)):
+    e = (user.get("email") or "").lower()
+    if not e:
+        raise HTTPException(400, "Non hai un'email registrata")
+    if user.get("email_verified"):
+        return {"ok": True, "message": "Email già verificata"}
+    try:
+        token = str(uuid.uuid4())
+        expires = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        await db.email_verifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "token": token,
+            "user_id": user["id"],
+            "email": e,
+            "created_at": now_iso(),
+            "expires_at": expires,
+            "used_at": None,
+        })
+        base_url = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("APP_PUBLIC_URL") or "https://libertaconoscenza.emergent.host"
+        verify_url = f"{base_url.rstrip('/')}/verify-email?token={token}"
+        from emailer import send_email, render_email_verification
+        subj, html = render_email_verification(user.get("name") or "", verify_url)
+        await send_email(to=e, subject=subj, html=html)
+        return {"ok": True, "message": "Email di verifica inviata"}
+    except Exception as ex:
+        raise HTTPException(500, f"Invio non riuscito: {ex}")
+
+
+@api.get("/verify-email")
+async def verify_email(token: str = ""):
+    """Public endpoint that consumes a verification token. Idempotent: even if
+    the token is old or already used, we return a stable response so the user
+    always sees a clean confirmation page."""
+    if not token:
+        return {"ok": False, "message": "Token mancante"}
+    v = await db.email_verifications.find_one({"token": token}, {"_id": 0})
+    if not v:
+        return {"ok": False, "message": "Token non valido o già utilizzato"}
+    # Check expiry
+    try:
+        exp = datetime.fromisoformat(v["expires_at"].replace("Z", "+00:00"))
+        if exp < datetime.now(timezone.utc):
+            return {"ok": False, "message": "Link scaduto. Torna in app e chiedi un nuovo invio."}
+    except Exception:
+        pass
+    if v.get("used_at"):
+        return {"ok": True, "message": "Email già verificata", "already": True}
+    # Mark user verified + consume token
+    await db.users.update_one({"id": v["user_id"], "email": v["email"]}, {"$set": {"email_verified": True, "email_verified_at": now_iso()}})
+    await db.email_verifications.update_one({"token": token}, {"$set": {"used_at": now_iso()}})
+    return {"ok": True, "message": "Email verificata con successo"}
 
 
 @api.get("/me/login-history")

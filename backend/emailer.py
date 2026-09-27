@@ -248,6 +248,28 @@ def render_certificate_issued(user_name: str, course_title: str, score_percent: 
     return subj, body
 
 
+def render_email_verification(user_name: str, verify_url: str) -> tuple[str, str]:
+    subj = "Conferma il tuo indirizzo email"
+    # verify_url is server-generated (never user input) — safe to interpolate.
+    body = _wrap(
+        f'<p>Ciao <strong>{escape(user_name or "utente")}</strong>,</p>'
+        f'<p>Grazie per aver inserito la tua email in <strong>{escape(_APP_NAME)}</strong>. '
+        f'Per confermare che questo indirizzo sia davvero tuo, clicca sul pulsante qui sotto:</p>'
+        f'<p style="text-align:center;margin:24px 0">'
+        f'<a href="{escape(verify_url, quote=True)}" '
+        f'style="display:inline-block;padding:14px 28px;border-radius:24px;'
+        f'background:{_BRAND_COLOR};color:#0e1512;text-decoration:none;font-weight:800">'
+        f'Conferma la mia email</a></p>'
+        f'<p style="font-size:12px;color:#B8B8AE">'
+        f'Puoi cliccare sul link quando vuoi: nel frattempo continuerai a usare l&#39;app senza limitazioni. '
+        f'Confermando l&#39;indirizzo eviti errori di battitura e ti assicuri di ricevere ricevute, '
+        f'risposte dell&#39;assistenza e certificati.'
+        f'</p>'
+        f'<p style="font-size:11px;color:#B8B8AE;margin-top:16px">Il link scade fra 30 giorni.</p>'
+    )
+    return subj, body
+
+
 def render_subscription_reminder(user_name: str, expires_iso: str, days_left: int) -> tuple[str, str]:
     subj = f"Il tuo abbonamento scade tra {days_left} giorni"
     from datetime import datetime
