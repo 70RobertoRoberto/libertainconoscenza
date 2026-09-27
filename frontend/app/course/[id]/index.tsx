@@ -216,23 +216,11 @@ export default function CourseDetailScreen() {
           </View>
         ) : null}
         {enrolled ? (
-          <>
-            {enrollment?.quiz_passed ? (
-              <Pressable
-                onPress={() =>
-                  enrollment.certificate_id
-                    ? router.push(`/certificate/${enrollment.certificate_id}` as any)
-                    : null
-                }
-                style={styles.ctaBtn}
-              >
-                <Text style={styles.ctaTxt}>🏆  Vedi certificato</Text>
-              </Pressable>
-            ) : null}
-            <Pressable onPress={() => router.push(`/course/${id}/read` as any)} style={styles.ctaBtn}>
-              <Text style={styles.ctaTxt}>Continua il corso ›</Text>
-            </Pressable>
-          </>
+          <Pressable onPress={() => router.push(`/course/${id}/read` as any)} style={styles.ctaBtn}>
+            <Text style={styles.ctaTxt}>
+              {enrollment?.quiz_passed ? "Rivedi il corso ›" : "Continua il corso ›"}
+            </Text>
+          </Pressable>
         ) : isPremium ? (
           <>
             <View style={{ marginBottom: spacing.sm }}>
