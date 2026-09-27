@@ -25,6 +25,7 @@ export default function Register() {
   const insets = useSafeAreaInsets();
   const { t, lang, setLang } = useLang();
   const [name, setName] = useState("");
+  const [surname, setSurname] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -47,6 +48,8 @@ export default function Register() {
     setErr("");
     if (!name.trim()) return setErr("Inserisci il tuo nome");
     if (name.trim().length < 2) return setErr("Il nome deve avere almeno 2 caratteri");
+    if (!surname.trim()) return setErr("Inserisci il tuo cognome");
+    if (surname.trim().length < 2) return setErr("Il cognome deve avere almeno 2 caratteri");
     if (!phone || !password) return setErr(t("err_required"));
     if (password.length < 6) return setErr(t("err_min"));
     const trimmedEmail = email.trim().toLowerCase();
@@ -59,9 +62,11 @@ export default function Register() {
       const user = await auth.register(
         normalizePhone(phone),
         password,
-        name.trim(),
+        `${name.trim()} ${surname.trim()}`,
         referral.trim() || undefined,
         trimmedEmail || undefined,
+        name.trim(),
+        surname.trim(),
       );
       registerForPush(user.id).catch(() => {});
       router.replace("/(tabs)");
@@ -113,12 +118,23 @@ export default function Register() {
             </Pressable>
           </View>
 
-          <Text style={styles.label}>{t("name_required")} <Text style={{ color: colors.brandPrimary }}>*</Text></Text>
+          <Text style={styles.label}>Nome <Text style={{ color: colors.brandPrimary }}>*</Text></Text>
           <TextInput
             testID="register-name-input"
             value={name}
             onChangeText={setName}
-            placeholder={t("name_placeholder")}
+            placeholder="Mario"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+            autoCapitalize="words"
+          />
+
+          <Text style={[styles.label, { marginTop: spacing.lg }]}>Cognome <Text style={{ color: colors.brandPrimary }}>*</Text></Text>
+          <TextInput
+            testID="register-surname-input"
+            value={surname}
+            onChangeText={setSurname}
+            placeholder="Rossi"
             placeholderTextColor={colors.muted}
             style={styles.input}
             autoCapitalize="words"

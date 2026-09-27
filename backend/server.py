@@ -116,7 +116,9 @@ TRIAL_DAYS = 15
 class RegisterIn(BaseModel):
     phone: str
     password: str = Field(min_length=6, max_length=128)
-    name: str = Field(min_length=2, max_length=80)
+    name: str = Field(min_length=2, max_length=80)  # kept for backward compat = "Nome Cognome"
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: Optional[str] = None
     referral_code: Optional[str] = None
 
@@ -322,6 +324,8 @@ def to_public_user(u: dict) -> dict:
         "email": u.get("email"),
         "email_verified": bool(u.get("email_verified", False)),
         "name": u.get("name"),
+        "first_name": u.get("first_name"),
+        "last_name": u.get("last_name"),
         "is_admin": u.get("is_admin", False),
         "subscription": subscription_view(u),
         "referral_code": u.get("referral_code"),
@@ -1048,12 +1052,29 @@ async def register(inp: RegisterIn, request: Request):
     ua = request.headers.get("user-agent", "") if request else ""
     ip = request.client.host if request and request.client else None
     device_lbl = _parse_ua(ua)
+    # Normalize name fields: if first/last provided, combine into name.
+    _first = (inp.first_name or "").strip()
+    _last = (inp.last_name or "").strip()
+    if _first or _last:
+        full_name = f"{_first} {_last}".strip()
+    else:
+        full_name = (inp.name or "").strip()
+        # Try to derive first/last from full name (single line "Mario Rossi")
+        parts = full_name.split()
+        if not _first and parts:
+            _first = parts[0]
+        if not _last and len(parts) > 1:
+            _last = " ".join(parts[1:])
+    if not full_name:
+        raise HTTPException(400, "Nome richiesto")
     user = {
         "id": str(uuid.uuid4()),
         "phone": phone,
         "email": email,
         "password_hash": hash_password(inp.password),
-        "name": inp.name or "",
+        "name": full_name,
+        "first_name": _first or None,
+        "last_name": _last or None,
         "is_admin": False,
         "subscription": {
             "status": "trial",

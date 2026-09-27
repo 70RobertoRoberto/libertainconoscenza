@@ -121,10 +121,10 @@ export const auth = {
     await setToken(r.access_token);
     return r.user;
   },
-  async register(phone: string, password: string, name?: string, referral_code?: string, email?: string) {
+  async register(phone: string, password: string, name?: string, referral_code?: string, email?: string, first_name?: string, last_name?: string) {
     const r = await api<{ access_token: string; user: any }>("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ phone, password, name, referral_code, email }),
+      body: JSON.stringify({ phone, password, name, referral_code, email, first_name, last_name }),
     });
     await setToken(r.access_token);
     return r.user;
