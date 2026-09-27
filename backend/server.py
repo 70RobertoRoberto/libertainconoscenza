@@ -307,6 +307,8 @@ def to_public_user(u: dict) -> dict:
         "is_admin": u.get("is_admin", False),
         "subscription": subscription_view(u),
         "referral_code": u.get("referral_code"),
+        "marketing_consent": bool(u.get("marketing_consent", False)),
+        "cookie_consent": u.get("cookie_consent"),  # null if not yet decided
     }
 
 
@@ -977,6 +979,43 @@ async def login(inp: LoginIn):
 @api.get("/auth/me")
 async def me(user: dict = Depends(current_user)):
     return to_public_user(user)
+
+
+class MarketingConsentIn(BaseModel):
+    consent: bool
+
+
+@api.post("/me/marketing-consent")
+async def set_marketing_consent(inp: MarketingConsentIn, user: dict = Depends(current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {
+            "marketing_consent": bool(inp.consent),
+            "marketing_consent_at": now_iso(),
+        }},
+    )
+    return {"ok": True, "marketing_consent": bool(inp.consent)}
+
+
+class CookieConsentIn(BaseModel):
+    technical: bool = True
+    analytics_first: bool = True
+    analytics_third: bool = False
+    marketing: bool = False
+
+
+@api.post("/me/cookie-consent")
+async def set_cookie_consent(inp: CookieConsentIn, request: Request, user: dict = Depends(current_user)):
+    doc = {
+        "technical": True,  # always required
+        "analytics_first": bool(inp.analytics_first),
+        "analytics_third": bool(inp.analytics_third),
+        "marketing": bool(inp.marketing),
+        "decided_at": now_iso(),
+        "decided_ip": request.client.host if request and request.client else None,
+    }
+    await db.users.update_one({"id": user["id"]}, {"$set": {"cookie_consent": doc}})
+    return {"ok": True, "cookie_consent": doc}
 
 
 class ChangePasswordIn(BaseModel):

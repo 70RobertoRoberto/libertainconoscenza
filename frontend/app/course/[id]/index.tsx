@@ -59,6 +59,7 @@ export default function CourseDetailScreen() {
   const [couponInfo, setCouponInfo] = useState<{ code: string; percent_off: number } | null>(null);
   const [couponErr, setCouponErr] = useState("");
   const [applying, setApplying] = useState(false);
+  const [withdrawalConsent, setWithdrawalConsent] = useState(false);
 
   const applyCoupon = async () => {
     setCouponErr("");
@@ -232,17 +233,44 @@ export default function CourseDetailScreen() {
             </Pressable>
           </>
         ) : isPremium ? (
-          <Pressable
-            onPress={() =>
-              toast(
-                "Pagamenti in attivazione",
-                "L'acquisto dei corsi Premium sarà disponibile a breve. Stiamo predisponendo Stripe e PayPal.",
-              )
-            }
-            style={[styles.ctaBtn, styles.ctaPremium]}
-          >
-            <Text style={styles.ctaTxt}>👑  Acquista — {showPrice} €</Text>
-          </Pressable>
+          <>
+            <Pressable
+              testID="withdrawal-consent"
+              onPress={() => setWithdrawalConsent((v) => !v)}
+              style={styles.consentRow}
+            >
+              <View style={[styles.checkbox, withdrawalConsent && styles.checkboxOn]}>
+                {withdrawalConsent ? <Text style={styles.checkboxTick}>✓</Text> : null}
+              </View>
+              <Text style={styles.consentTxt}>
+                {"Acconsento all'erogazione immediata del corso digitale e dichiaro di essere consapevole che, con l'inizio della fruizione del contenuto, perdo il diritto di recesso ai sensi dell'art. 59, comma 1, lett. o) del Codice del Consumo (D.Lgs. 206/2005). "}
+                <Text
+                  onPress={() => router.push("/terms")}
+                  style={styles.consentLink}
+                >
+                  Leggi i termini
+                </Text>
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (!withdrawalConsent) {
+                  toast(
+                    "Consenso richiesto",
+                    "Per procedere devi accettare la clausola sul recesso.",
+                  );
+                  return;
+                }
+                toast(
+                  "Pagamenti in attivazione",
+                  "L'acquisto dei corsi Premium sarà disponibile a breve. Stiamo predisponendo Stripe e PayPal.",
+                );
+              }}
+              style={[styles.ctaBtn, styles.ctaPremium, !withdrawalConsent && styles.ctaDisabled]}
+            >
+              <Text style={styles.ctaTxt}>👑  Acquista — {showPrice} €</Text>
+            </Pressable>
+          </>
         ) : (
           <Pressable onPress={enroll} style={styles.ctaBtn}>
             <Text style={styles.ctaTxt}>Inizia il corso</Text>
@@ -322,4 +350,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   couponBtnTxt: { color: colors.brandPrimary, fontWeight: "700", fontSize: 13 },
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: spacing.sm,
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    marginTop: 2,
+  },
+  checkboxOn: { backgroundColor: colors.brandPrimary },
+  checkboxTick: { color: colors.onBrandPrimary, fontSize: 14, fontWeight: "800" },
+  consentTxt: {
+    flex: 1,
+    color: colors.onSurfaceSecondary,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  consentLink: {
+    color: colors.brandPrimary,
+    fontWeight: "700",
+  },
+  ctaDisabled: { opacity: 0.45 },
 });

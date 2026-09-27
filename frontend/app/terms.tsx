@@ -84,9 +84,9 @@ const SECTIONS: { title: string; body: string }[] = [
       `Possiamo modificare questi termini per aggiornarli alle esigenze del servizio o alle norme di legge. Ti informeremo delle modifiche significative tramite la home dell'app o via email. L'uso continuato dell'app dopo la modifica vale come accettazione dei nuovi termini.`,
   },
   {
-    title: "16. Contatti e legge applicabile",
+    title: "16. Contatti, titolare e legge applicabile",
     body:
-      `Per qualsiasi domanda su questi termini scrivi a ${CONTACT_EMAIL}. Il servizio è governato dalla legge italiana; qualsiasi controversia sarà di competenza del Foro del consumatore secondo le norme applicabili.`,
+      `Titolare del trattamento e fornitore del servizio:\nIstituto di Bioenergia\nVia Bilianusaldu snc\n07021 Arzachena (SS) – Italia\nP.IVA 02862510902\nEmail: ${CONTACT_EMAIL}\n\nPer qualsiasi domanda su questi termini scrivi a ${CONTACT_EMAIL}. Il servizio è governato dalla legge italiana; qualsiasi controversia sarà di competenza del Foro del consumatore secondo le norme applicabili.`,
   },
 ];
 

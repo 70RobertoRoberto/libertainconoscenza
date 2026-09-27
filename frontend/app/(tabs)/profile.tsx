@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Image, Share, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image, Share, Linking, Switch, Platform, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
@@ -17,14 +17,37 @@ export default function Profile() {
   const [stats, setStats] = useState<any>(null);
   const [enrollCount, setEnrollCount] = useState<number>(0);
   const [certCount, setCertCount] = useState<number>(0);
+  const [marketing, setMarketing] = useState<boolean>(false);
+  const [savingMarketing, setSavingMarketing] = useState(false);
 
   useEffect(() => {
-    auth.me().then(setUser).catch(() => {});
+    auth.me().then((u: any) => {
+      setUser(u);
+      setMarketing(!!u?.marketing_consent);
+    }).catch(() => {});
     api<any>("/referrals/me").then(setRef).catch(() => {});
     api<any>("/me/stats").then(setStats).catch(() => {});
     api<any>("/me/enrollments").then((r) => setEnrollCount(r?.items?.length || 0)).catch(() => {});
     api<any>("/me/certificates").then((r) => setCertCount(r?.items?.length || 0)).catch(() => {});
   }, []);
+
+  const toggleMarketing = async (v: boolean) => {
+    setSavingMarketing(true);
+    const prev = marketing;
+    setMarketing(v);
+    try {
+      await api<any>("/me/marketing-consent", {
+        method: "POST",
+        body: JSON.stringify({ consent: v }),
+      });
+    } catch (e: any) {
+      setMarketing(prev);
+      if (Platform.OS === "web") window.alert(`Errore: ${e?.message || "-"}`);
+      else Alert.alert("Errore", e?.message || "-");
+    } finally {
+      setSavingMarketing(false);
+    }
+  };
 
   const sub = user?.subscription || {};
   const isPremium = sub.status === "premium";
@@ -171,6 +194,33 @@ export default function Profile() {
           testID="go-disclaimer"
           label="Disclaimer"
           onPress={() => router.push("/disclaimer")}
+        />
+      </Card>
+
+      <Card style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>🔐  Privacy e cookie</Text>
+        <View style={{ height: spacing.md }} />
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.onSurface, fontSize: 14, fontWeight: "700" }}>Comunicazioni promozionali</Text>
+            <Muted style={{ fontSize: 12, marginTop: 2 }}>
+              Ricevi via email novità sui corsi e iniziative. Puoi revocare in qualsiasi momento.
+            </Muted>
+          </View>
+          <Switch
+            testID="toggle-marketing"
+            value={marketing}
+            onValueChange={toggleMarketing}
+            disabled={savingMarketing}
+            trackColor={{ true: colors.brandPrimary, false: colors.border }}
+            thumbColor={marketing ? colors.onBrandPrimary : colors.muted}
+          />
+        </View>
+        <View style={{ height: spacing.md }} />
+        <OutlineButton
+          testID="review-cookies"
+          label="Rivedi consenso cookie"
+          onPress={() => router.push("/cookie-preferences")}
         />
       </Card>
 

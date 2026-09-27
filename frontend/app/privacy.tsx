@@ -11,7 +11,7 @@ const SECTIONS: { title: string; body: string }[] = [
   {
     title: "1. Titolare del trattamento",
     body:
-      `Il Titolare del trattamento dei dati personali raccolti tramite l'app ${APP_NAME} è la Direzione di Libertà in Conoscenza. Per qualsiasi domanda o richiesta relativa alla tua privacy puoi scrivere a ${CONTACT_EMAIL}. Riferimento normativo: Regolamento (UE) 2016/679 (GDPR) e D.Lgs. 196/2003 e successive modificazioni.`,
+      `Il Titolare del trattamento dei dati personali raccolti tramite l'app ${APP_NAME} è:\n\nIstituto di Bioenergia\nVia Bilianusaldu snc\n07021 Arzachena (SS) – Italia\nP.IVA 02862510902\nEmail: ${CONTACT_EMAIL}\n\nRiferimento normativo: Regolamento (UE) 2016/679 (GDPR) e D.Lgs. 196/2003 e successive modificazioni.`,
   },
   {
     title: "2. Dati che raccogliamo",

@@ -4,6 +4,7 @@ import { LogBox, Platform, Linking as RNLinking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { AdOverlay } from "@/src/AdOverlay";
+import CookieBanner from "@/src/CookieBanner";
 import Constants from "expo-constants";
 import { useEffect } from "react";
 import { initLang } from "@/src/i18n";
@@ -148,6 +149,7 @@ export default function RootLayout() {
           }}
         />
         <AdOverlay />
+        <CookieBanner />
       </SafeAreaProvider>
     </QueryClientProvider>
   );
