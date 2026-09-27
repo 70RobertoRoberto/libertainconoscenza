@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import * as ImagePicker from "expo-image-picker";
+import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { colors, spacing, radius } from "@/src/theme";
 import { api, adminUpload } from "@/src/api";
@@ -807,6 +808,52 @@ function TopicEditor({
   const [contentHtml, setContentHtml] = useState(topic?.content_html || "");
   const [editorOpen, setEditorOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState<null | "video" | "audio">(null);
+
+  const appendMediaTag = (kind: "video" | "audio", url: string) => {
+    // Append a <video>/<audio> tag at the end of the current content so the user
+    // can reorder it via the WYSIWYG afterwards if needed.
+    const tag =
+      kind === "video"
+        ? `<p><video controls playsinline preload="metadata" style="width:100%;max-width:100%;border-radius:8px;background:#000"><source src="${url}"></video></p>`
+        : `<p><audio controls preload="metadata" style="width:100%"><source src="${url}"></audio></p>`;
+    setContentHtml((prev) => (prev ? `${prev}\n${tag}` : tag));
+  };
+
+  const pickAndUpload = async (mediaKind: "video" | "audio") => {
+    const isVideo = mediaKind === "video";
+    const type = isVideo ? "video/*" : "audio/*";
+    const maxMB = isVideo ? 500 : 120;
+    try {
+      const pick = await DocumentPicker.getDocumentAsync({
+        type,
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (pick.canceled || !pick.assets?.[0]) return;
+      const asset = pick.assets[0];
+      const uri = asset.uri;
+      const fileName = asset.name || (isVideo ? "video.mp4" : "audio.mp3");
+      const mime = asset.mimeType || (isVideo ? "video/mp4" : "audio/mpeg");
+      if (Platform.OS !== "web") {
+        try {
+          const info = await FileSystem.getInfoAsync(uri);
+          if (info.exists && (info.size || 0) > maxMB * 1024 * 1024) {
+            toast(`${isVideo ? "Video" : "Audio"} troppo grande`, `Massimo ${maxMB} MB.`);
+            return;
+          }
+        } catch { /* ignore */ }
+      }
+      setMediaUploading(mediaKind);
+      const up = await adminUpload(uri, mime, fileName);
+      appendMediaTag(mediaKind, up.url);
+      toast(`${isVideo ? "Video" : "Audio"} caricato`, "Aggiunto in coda al contenuto. Puoi spostarlo dall'editor.");
+    } catch (e: any) {
+      toast("Errore upload", String(e?.message || e));
+    } finally {
+      setMediaUploading(null);
+    }
+  };
 
   const save = async () => {
     if (!title.trim()) return toast("Titolo obbligatorio");
@@ -863,10 +910,47 @@ function TopicEditor({
               {contentHtml ? "✎ Modifica contenuto" : "✎ Apri editor…"}
             </Text>
           </Pressable>
+
+          {/* Media upload buttons — outside WYSIWYG to avoid base64 blowup */}
+          <Text style={s.label}>Allegati multimediali (caricamento diretto)</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 6 }}>
+            Carica direttamente dal tuo device. Vengono aggiunti in coda al contenuto come player integrato.
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", marginBottom: spacing.md }}>
+            <Pressable
+              onPress={() => pickAndUpload("video")}
+              style={[s.mediaBtn, mediaUploading === "video" && s.mediaBtnBusy]}
+              disabled={mediaUploading !== null}
+            >
+              {mediaUploading === "video" ? (
+                <>
+                  <ActivityIndicator color={colors.brandPrimary} />
+                  <Text style={s.mediaBtnTxt}>Carico video…</Text>
+                </>
+              ) : (
+                <Text style={s.mediaBtnTxt}>🎬  Carica video (max 500 MB)</Text>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => pickAndUpload("audio")}
+              style={[s.mediaBtn, mediaUploading === "audio" && s.mediaBtnBusy]}
+              disabled={mediaUploading !== null}
+            >
+              {mediaUploading === "audio" ? (
+                <>
+                  <ActivityIndicator color={colors.brandPrimary} />
+                  <Text style={s.mediaBtnTxt}>Carico audio…</Text>
+                </>
+              ) : (
+                <Text style={s.mediaBtnTxt}>🎧  Carica audio (max 120 MB)</Text>
+              )}
+            </Pressable>
+          </View>
+
           {contentHtml ? (
             <View style={s.previewBox}>
               <Text style={s.previewLabel}>Anteprima:</Text>
-              <View style={{ height: 220 }}>
+              <View style={{ height: 260 }}>
                 <RichViewer html={contentHtml} />
               </View>
             </View>
@@ -1063,6 +1147,9 @@ const s = StyleSheet.create({
   freeBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.brandTertiary, borderLeftWidth: 3, borderLeftColor: colors.brandPrimary, marginBottom: spacing.md },
   freeTitle: { color: colors.onBrandTertiary, fontWeight: "800", fontSize: 14 },
   freeBody: { color: colors.onBrandTertiary, fontSize: 13, lineHeight: 19, marginTop: 4, opacity: 0.9 },
+  mediaBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 12, borderRadius: radius.md, borderWidth: 1, borderColor: colors.brandPrimary, backgroundColor: colors.surfaceSecondary },
+  mediaBtnBusy: { opacity: 0.7 },
+  mediaBtnTxt: { color: colors.brandPrimary, fontSize: 13, fontWeight: "700" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 },
   aChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceSecondary },
   aChipActive: { borderColor: colors.brandPrimary, backgroundColor: colors.brandPrimary },
