@@ -73,6 +73,8 @@ class QuizIn(BaseModel):
     questions_per_attempt: Optional[int] = None
     min_different_between_attempts: int = 0
     retry_lockout_days: int = 15  # days to wait after exhausting all attempts
+    # Celebratory / auspicious message shown to the user after passing the quiz.
+    success_wish_message: str = Field(default="", max_length=1000)
 
 
 class CoursePromo(BaseModel):
@@ -177,6 +179,7 @@ def _quiz_out(d: dict) -> dict:
         "questions_per_attempt": int(qpa) if qpa else None,
         "min_different_between_attempts": int(d.get("min_different_between_attempts", 0) or 0),
         "retry_lockout_days": int(d.get("retry_lockout_days", 15) or 15),
+        "success_wish_message": (d.get("success_wish_message") or "").strip(),
         "created_at": d.get("created_at"),
         "updated_at": d.get("updated_at"),
     }
@@ -498,6 +501,7 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "questions_per_attempt": qpa,
             "min_different_between_attempts": min_diff,
             "retry_lockout_days": lockout,
+            "success_wish_message": (inp.success_wish_message or "").strip()[:1000],
             "updated_at": _now(),
         }
         existing = await db.course_quizzes.find_one({"course_id": course_id})
@@ -946,6 +950,7 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "certificate_id": certificate_id if passed else None,
             "feedback": _match_feedback_band(quiz.get("feedback_bands", []), correct_count),
             "locked_until": response_locked_until,
+            "wish_message": (quiz.get("success_wish_message") or "").strip() if passed else "",
         }
 
     @router.get("/me/enrollments", dependencies=[Depends(current_user)])

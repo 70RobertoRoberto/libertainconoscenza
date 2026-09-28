@@ -33,6 +33,7 @@ type AttemptResult = {
   certificate_id: string | null;
   feedback?: string | null;
   locked_until?: string | null;
+  wish_message?: string;
 };
 
 function toast(t: string, m?: string) {
@@ -162,6 +163,12 @@ export default function CourseQuizScreen() {
           <View style={s.feedbackBox}>
             <Text style={s.feedbackLabel}>📝  Risultato valutazione</Text>
             <Text style={s.feedbackTxt}>{result.feedback}</Text>
+          </View>
+        ) : null}
+        {result.passed && result.wish_message ? (
+          <View style={s.wishBox}>
+            <Text style={s.wishGlyph}>🌱</Text>
+            <Text style={s.wishTxt}>{result.wish_message}</Text>
           </View>
         ) : null}
         {result.passed && result.certificate_id ? (
@@ -425,5 +432,26 @@ const s = StyleSheet.create({
   lockDate: {
     color: colors.brandPrimary,
     fontWeight: "800",
+  },
+  wishBox: {
+    marginTop: spacing.lg,
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: "rgba(201,162,79,0.10)",
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+  },
+  wishGlyph: {
+    fontSize: 34,
+    marginBottom: spacing.sm,
+  },
+  wishTxt: {
+    color: colors.onSurface,
+    fontSize: 15,
+    lineHeight: 24,
+    fontFamily: "Georgia",
+    fontStyle: "italic",
+    textAlign: "center",
   },
 });

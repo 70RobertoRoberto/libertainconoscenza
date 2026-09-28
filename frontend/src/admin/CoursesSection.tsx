@@ -1151,6 +1151,9 @@ function QuizEditor({
   const [lockoutDays, setLockoutDays] = useState<string>(
     String((quiz as any)?.retry_lockout_days ?? 15)
   );
+  const [wishMessage, setWishMessage] = useState<string>(
+    (quiz as any)?.success_wish_message || ""
+  );
 
   const addBand = () => setBands((bs) => [...bs, { min_correct: 0, max_correct: 0, message: "" }]);
   const delBand = (i: number) => setBands((bs) => bs.filter((_, idx) => idx !== i));
@@ -1218,6 +1221,7 @@ function QuizEditor({
         questions_per_attempt: poolMode ? qpa : null,
         min_different_between_attempts: poolMode ? md : 0,
         retry_lockout_days: lk,
+        success_wish_message: wishMessage.trim(),
         feedback_bands: bands
           .filter(b => (b.message || "").trim())
           .map(b => ({
@@ -1317,6 +1321,26 @@ function QuizEditor({
             />
             <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
               Se l&apos;utente fallisce tutti i 3 tentativi, dovrà attendere questi giorni prima di riprovare. Consigliato: 15.
+            </Text>
+          </View>
+
+          {/* Success wish message (shown after passing) */}
+          <View style={{ marginTop: spacing.xxl }}>
+            <Text style={s.h2}>Messaggio di successo</Text>
+            <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 4, marginBottom: spacing.md }}>
+              Frase di buon auspicio mostrata all&apos;utente dopo aver superato il quiz. Se lasciato vuoto, non viene mostrato nulla.
+            </Text>
+            <TextInput
+              style={[s.input, { minHeight: 100 }]}
+              multiline
+              placeholder="Es. Complimenti! Questo corso è stato solo un piccolo passo del cammino. Che la conoscenza acquisita ti accompagni nella tua vita di ogni giorno. 🙏"
+              placeholderTextColor={colors.muted}
+              value={wishMessage}
+              onChangeText={setWishMessage}
+              maxLength={1000}
+            />
+            <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+              {wishMessage.length}/1000 caratteri
             </Text>
           </View>
 

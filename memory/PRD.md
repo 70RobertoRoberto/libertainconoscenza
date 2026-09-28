@@ -25,6 +25,7 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
   - Expiry day + auto_renew=false → downgrade to free + purge_at = now+6mo + "grazie per il tempo insieme, dati salvati 6 mesi"
   - Purge job: after 6 months of non-renewal → wipes course progress (enrollments, quiz_attempts, certificates, favorites, completions, comments, views). Idempotent via `subscription.reminders_sent` map. Admin can trigger manually via `POST /api/admin/subscriptions/run-daily-job`.
 - **Quiz — Pool casuale + lockout 15gg**: opzionale sul quiz di ogni corso. Admin carica un pool ampio (es. 15 domande) e imposta `questions_per_attempt` (es. 8) + `min_different_between_attempts` (es. 2). Ad ogni tentativo il sistema estrae randomicamente N domande dal pool, garantendo che almeno M siano diverse dal tentativo precedente. Nuovo endpoint `POST /courses/{id}/quiz-view/start-attempt` prepara l'estrazione persistente (page reload safe). Dopo 3 tentativi falliti scatta un lockout configurabile (default 15gg): l'utente vede una card "Ripassa il corso, riprova il {data}". Al termine del lockout riparte un ciclo pulito di 3 tentativi. Retrocompatibile: quiz senza pool config → funzionano come prima.
+- **Quiz — Messaggio di buon auspicio al superamento**: admin può inserire un `success_wish_message` (max 1000 caratteri) sul quiz. Quando l'utente supera il quiz, il messaggio viene mostrato in una card decorativa (Georgia italic + glyph 🌱) tra il feedback band e il CTA certificato.
 
 ## Integrations
 - Emergent LLM key (GPT-4o-mini) for article AI summarization
