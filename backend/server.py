@@ -483,6 +483,13 @@ async def startup():
     if count == 0:
         await _seed_demo_content()
 
+    # Start daily subscription lifecycle scheduler (7d/1d reminders, renewal, farewell, 6mo purge)
+    try:
+        from subscription_scheduler import start_scheduler
+        start_scheduler(db)
+    except Exception as e:
+        logger.warning(f"Subscription scheduler failed to start: {e}")
+
 
 async def _seed_demo_content():
     """Seed initial content from the 3 websites (AI-style summaries)."""
@@ -2417,6 +2424,17 @@ async def list_orders():
     return {"items": items}
 
 
+@api.post("/admin/subscriptions/run-daily-job", dependencies=[Depends(require_admin)])
+async def admin_run_subscription_job():
+    """Manually trigger the daily subscription lifecycle job (idempotent).
+    Returns a summary of actions taken (reminders sent, renewals, farewells, purges).
+    """
+    from subscription_scheduler import run_subscription_lifecycle
+    result = await run_subscription_lifecycle(db)
+    return {"ok": True, "result": result}
+
+
+
 # ---------------------------------------------------------------------------
 # Public share pages with OpenGraph meta (for WhatsApp / Telegram preview)
 # ---------------------------------------------------------------------------
@@ -2944,4 +2962,9 @@ app.add_middleware(
 
 @app.on_event("shutdown")
 async def shutdown():
+    try:
+        from subscription_scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     client.close()

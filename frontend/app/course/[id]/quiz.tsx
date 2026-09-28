@@ -19,11 +19,14 @@ type QuizView = {
 
 type AttemptResult = {
   score: number;
+  correct_count?: number;
+  total_questions?: number;
   passed: boolean;
   attempts_used: number;
   max_attempts: number;
   per_question: { question_id: string; correct_index: number; user_index: number; is_correct: boolean; explanation: string }[];
   certificate_id: string | null;
+  feedback?: string | null;
 };
 
 function toast(t: string, m?: string) {
@@ -79,11 +82,23 @@ export default function CourseQuizScreen() {
         <View style={[s.resultBox, result.passed ? s.pass : s.fail]}>
           <Text style={s.resultBig}>{result.passed ? "🏆" : "😊"}</Text>
           <Text style={s.resultTitle}>{result.passed ? "Quiz superato!" : "Non superato"}</Text>
-          <Text style={s.resultSub}>Punteggio: {Math.round(result.score * 100)}%</Text>
+          {typeof result.correct_count === "number" && typeof result.total_questions === "number" ? (
+            <Text style={s.resultSub}>
+              {result.correct_count} su {result.total_questions} corrette · {Math.round(result.score * 100)}%
+            </Text>
+          ) : (
+            <Text style={s.resultSub}>Punteggio: {Math.round(result.score * 100)}%</Text>
+          )}
           <Text style={s.resultSub}>
             Tentativi: {result.attempts_used}/{result.max_attempts}
           </Text>
         </View>
+        {result.feedback ? (
+          <View style={s.feedbackBox}>
+            <Text style={s.feedbackLabel}>📝  Risultato valutazione</Text>
+            <Text style={s.feedbackTxt}>{result.feedback}</Text>
+          </View>
+        ) : null}
         {result.passed && result.certificate_id ? (
           <Pressable
             onPress={() => router.replace(`/certificate/${result.certificate_id}` as any)}
@@ -250,6 +265,28 @@ const s = StyleSheet.create({
   resultBig: { fontSize: 60 },
   resultTitle: { color: colors.onSurface, fontSize: 20, fontWeight: "800", marginTop: 8 },
   resultSub: { color: colors.onSurfaceSecondary, fontSize: 14, marginTop: 4 },
+  feedbackBox: {
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+  },
+  feedbackLabel: {
+    color: colors.brandPrimary,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: spacing.sm,
+  },
+  feedbackTxt: {
+    color: colors.onSurface,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: "Georgia",
+  },
   sectionTitle: {
     color: colors.brandPrimary, fontSize: 12, fontWeight: "800", letterSpacing: 2,
     textTransform: "uppercase", marginTop: spacing.xl, marginBottom: spacing.sm,

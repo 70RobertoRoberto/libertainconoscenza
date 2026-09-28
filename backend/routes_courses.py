@@ -54,10 +54,20 @@ class QuizQuestion(BaseModel):
     explanation: str = ""
 
 
+class QuizFeedbackBand(BaseModel):
+    # Feedback band shown to user based on their correct-answer count (or %).
+    # `min_correct` and `max_correct` are inclusive. E.g. {min:4, max:5, ...}
+    # means "shown when the user got 4 or 5 correct answers".
+    min_correct: int = Field(ge=0)
+    max_correct: int = Field(ge=0)
+    message: str = Field(min_length=1, max_length=1000)
+
+
 class QuizIn(BaseModel):
     questions: List[QuizQuestion] = []
     pass_threshold: float = 0.70
     max_attempts: int = 3
+    feedback_bands: List[QuizFeedbackBand] = []
 
 
 class CoursePromo(BaseModel):
@@ -157,9 +167,26 @@ def _quiz_out(d: dict) -> dict:
         "questions": d.get("questions", []),
         "pass_threshold": float(d.get("pass_threshold", 0.7)),
         "max_attempts": int(d.get("max_attempts", 3)),
+        "feedback_bands": d.get("feedback_bands", []),
         "created_at": d.get("created_at"),
         "updated_at": d.get("updated_at"),
     }
+
+
+def _match_feedback_band(bands: list, correct_count: int) -> Optional[str]:
+    """Return the feedback message that matches the given number of correct
+    answers, or None if no band matches."""
+    for b in bands or []:
+        try:
+            lo = int(b.get("min_correct", 0))
+            hi = int(b.get("max_correct", 0))
+            if lo <= correct_count <= hi:
+                msg = b.get("message") or ""
+                if msg.strip():
+                    return msg
+        except Exception:
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -427,6 +454,7 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "questions": [q.model_dump() for q in inp.questions],
             "pass_threshold": float(inp.pass_threshold or 0.7),
             "max_attempts": int(inp.max_attempts or 3),
+            "feedback_bands": [b.model_dump() for b in (inp.feedback_bands or [])],
             "updated_at": _now(),
         }
         existing = await db.course_quizzes.find_one({"course_id": course_id})
@@ -690,11 +718,14 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
                 pass
         return {
             "score": score,
+            "correct_count": correct_count,
+            "total_questions": total,
             "passed": passed,
             "attempts_used": used + 1,
             "max_attempts": max_attempts,
             "per_question": per_question,
             "certificate_id": certificate_id if passed else None,
+            "feedback": _match_feedback_band(quiz.get("feedback_bands", []), correct_count),
         }
 
     @router.get("/me/enrollments", dependencies=[Depends(current_user)])

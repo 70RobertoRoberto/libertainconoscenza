@@ -83,6 +83,7 @@ type Quiz = {
   questions: { id: string; text: string; answers: { text: string; is_correct: boolean }[]; explanation: string }[];
   pass_threshold: number;
   max_attempts: number;
+  feedback_bands?: { min_correct: number; max_correct: number; message: string }[];
 } | null;
 
 const TOPIC_KINDS: { key: string; label: string; hint: string }[] = [
@@ -1131,12 +1132,38 @@ function QuizEditor({
   courseId, quiz, onClose, onSaved,
 }: { courseId: string; quiz: Quiz; onClose: () => void; onSaved: () => void }) {
   type Q = { id: string; text: string; answers: { text: string; is_correct: boolean }[]; explanation: string };
+  type Band = { min_correct: number; max_correct: number; message: string };
   const [questions, setQuestions] = useState<Q[]>(
     quiz?.questions?.length
       ? quiz.questions
       : [{ id: crypto.randomUUID?.() || String(Math.random()), text: "", answers: [ { text: "", is_correct: true }, { text: "", is_correct: false }, { text: "", is_correct: false }, { text: "", is_correct: false } ], explanation: "" }]
   );
+  const [bands, setBands] = useState<Band[]>(quiz?.feedback_bands?.length ? (quiz!.feedback_bands as any) : []);
   const [saving, setSaving] = useState(false);
+
+  const addBand = () => setBands((bs) => [...bs, { min_correct: 0, max_correct: 0, message: "" }]);
+  const delBand = (i: number) => setBands((bs) => bs.filter((_, idx) => idx !== i));
+  const setBand = (i: number, patch: Partial<Band>) => setBands((bs) => bs.map((b, idx) => idx === i ? { ...b, ...patch } : b));
+  const suggestBands = () => {
+    const n = questions.length || 5;
+    if (n >= 10) {
+      setBands([
+        { min_correct: Math.ceil(n * 0.9), max_correct: n, message: "Ottimo! Hai una padronanza solida dei contenuti. Sei pronto ad applicarli." },
+        { min_correct: Math.ceil(n * 0.7), max_correct: Math.ceil(n * 0.9) - 1, message: "Ottima preparazione. Rileggi i moduli che ti hanno dato più difficoltà." },
+        { min_correct: Math.ceil(n * 0.5), max_correct: Math.ceil(n * 0.7) - 1, message: "Buona base. Rileggi con calma i moduli meno chiari." },
+        { min_correct: Math.ceil(n * 0.3), max_correct: Math.ceil(n * 0.5) - 1, message: "Il corso è denso. Rileggilo con calma, un modulo alla volta." },
+        { min_correct: 0, max_correct: Math.ceil(n * 0.3) - 1, message: "Nessun problema. Riprendi dal primo modulo, senza fretta." },
+      ]);
+    } else {
+      setBands([
+        { min_correct: n, max_correct: n, message: "Hai colto l'essenza del corso. Ora tocca a te: applica quello che hai imparato." },
+        { min_correct: Math.max(1, n - 1), max_correct: Math.max(1, n - 1), message: "Ottimo risultato. Torna sul modulo che ti ha dato più difficoltà e rileggilo con calma." },
+        { min_correct: Math.max(1, Math.floor(n * 0.6)), max_correct: Math.max(1, n - 2), message: "Buona base. Ti consiglio di rileggere i moduli meno chiari." },
+        { min_correct: 1, max_correct: Math.max(1, Math.floor(n * 0.4)), message: "Il corso è denso. Vale la pena rileggerlo, senza fretta." },
+        { min_correct: 0, max_correct: 0, message: "Riprova con calma. Il corso è pensato per essere letto più di una volta." },
+      ]);
+    }
+  };
 
   const addQuestion = () => setQuestions((qs) => [
     ...qs,
@@ -1162,6 +1189,13 @@ function QuizEditor({
         questions: questions.map(q => ({ ...q, answers: q.answers.filter(a => a.text.trim()) })),
         pass_threshold: 0.7,
         max_attempts: 3,
+        feedback_bands: bands
+          .filter(b => (b.message || "").trim())
+          .map(b => ({
+            min_correct: Math.max(0, Math.min(b.min_correct, b.max_correct)),
+            max_correct: Math.max(b.min_correct, b.max_correct),
+            message: b.message.trim(),
+          })),
       };
       await api(`/admin/courses/${courseId}/quiz`, { method: "PUT", body: JSON.stringify(payload) });
       onSaved();
@@ -1204,6 +1238,63 @@ function QuizEditor({
           <Pressable onPress={addQuestion} style={s.primaryBtnSm2}>
             <Text style={s.primaryTxt}>+ Aggiungi domanda</Text>
           </Pressable>
+
+          {/* Feedback bands */}
+          <View style={{ marginTop: spacing.xxl }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={s.h2}>Risultato valutazione</Text>
+              {bands.length === 0 ? (
+                <Pressable onPress={suggestBands} style={s.primaryBtnSm2}>
+                  <Text style={s.primaryTxt}>Precompila</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 4, marginBottom: spacing.md }}>
+              Messaggi mostrati all&apos;utente in base al numero di risposte corrette. Es. 4-5 → &quot;Ottimo risultato&hellip;&quot;.
+            </Text>
+            {bands.map((b, bi) => (
+              <View key={bi} style={s.qCard}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={s.qNum}>Fascia {bi + 1}</Text>
+                  <Pressable onPress={() => delBand(bi)}>
+                    <Text style={{ color: colors.danger || "#c33" }}>Elimina</Text>
+                  </Pressable>
+                </View>
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.label}>Da (corrette)</Text>
+                    <TextInput
+                      style={s.input}
+                      keyboardType="numeric"
+                      value={String(b.min_correct)}
+                      onChangeText={(t) => setBand(bi, { min_correct: parseInt(t) || 0 })}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.label}>A (corrette)</Text>
+                    <TextInput
+                      style={s.input}
+                      keyboardType="numeric"
+                      value={String(b.max_correct)}
+                      onChangeText={(t) => setBand(bi, { max_correct: parseInt(t) || 0 })}
+                    />
+                  </View>
+                </View>
+                <Text style={[s.label, { marginTop: 6 }]}>Messaggio all&apos;utente</Text>
+                <TextInput
+                  style={[s.input, { minHeight: 70 }]}
+                  multiline
+                  placeholder="Es. Ottimo risultato. Rileggi il modulo che ti ha dato più difficoltà."
+                  placeholderTextColor={colors.muted}
+                  value={b.message}
+                  onChangeText={(t) => setBand(bi, { message: t })}
+                />
+              </View>
+            ))}
+            <Pressable onPress={addBand} style={s.primaryBtnSm2}>
+              <Text style={s.primaryTxt}>+ Aggiungi fascia</Text>
+            </Pressable>
+          </View>
         </ScrollView>
       </View>
     </Modal>

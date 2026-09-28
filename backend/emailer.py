@@ -270,19 +270,99 @@ def render_email_verification(user_name: str, verify_url: str) -> tuple[str, str
     return subj, body
 
 
-def render_subscription_reminder(user_name: str, expires_iso: str, days_left: int) -> tuple[str, str]:
-    subj = f"Il tuo abbonamento scade tra {days_left} giorni"
+def _fmt_date(iso: str) -> str:
     from datetime import datetime
     try:
-        d = datetime.fromisoformat(expires_iso.replace("Z", "+00:00")).strftime("%d/%m/%Y")
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).strftime("%d/%m/%Y")
     except Exception:
-        d = expires_iso
+        return iso
+
+
+def render_subscription_reminder(user_name: str, expires_iso: str, days_left: int) -> tuple[str, str]:
+    """Legacy helper — kept for backward compatibility. Prefer the specific renderers below."""
+    return render_renewal_reminder_7d(user_name, expires_iso) if days_left >= 4 else render_renewal_reminder_1d(user_name, expires_iso)
+
+
+def render_renewal_reminder_7d(user_name: str, expires_iso: str) -> tuple[str, str]:
+    """Email inviata 7 giorni prima della scadenza (solo se auto_renew=True)."""
+    subj = "Il tuo abbonamento si rinnoverà automaticamente tra 7 giorni"
+    d = _fmt_date(expires_iso)
     body = _wrap(
         f'<p>Ciao <strong>{escape(user_name or "utente")}</strong>,</p>'
-        f'<p>Ti ricordiamo che il tuo abbonamento annuale scadrà il '
-        f'<strong style="color:{_BRAND_COLOR}">{escape(d)}</strong> (fra {days_left} giorni).</p>'
-        f'<p>Il rinnovo automatico è attivo: nulla da fare da parte tua. '
-        f'Se preferisci disdirlo, apri l&#39;app e vai su <em>Profilo → Abbonamento Premium → Disdici rinnovo automatico</em>.</p>'
-        f'<p style="font-size:12px;color:#B8B8AE">Puoi disdire fino a 24 ore prima della scadenza; il tuo accesso Premium resterà attivo fino al giorno indicato.</p>'
+        f'<p>Ti ricordiamo che tra <strong style="color:{_BRAND_COLOR}">7 giorni</strong> '
+        f'(il <strong>{escape(d)}</strong>) il tuo abbonamento annuale a '
+        f'<strong>{escape(_APP_NAME)}</strong> si rinnoverà automaticamente per un altro anno, '
+        f'al costo di <strong>12&nbsp;€/anno</strong>.</p>'
+        f'<p>Non devi fare nulla: continuerai ad avere accesso senza interruzioni a tutti i '
+        f'contenuti premium, ai corsi, alle meditazioni e alla biblioteca. 🌿</p>'
+        f'<p>Se invece desideri <strong>non rinnovare</strong>, puoi disattivare il rinnovo '
+        f'automatico in qualsiasi momento entro la data di scadenza dalla tua area personale: '
+        f'<em>Profilo → Abbonamento → Disdici rinnovo automatico</em>.</p>'
+        f'<p style="margin-top:20px">Grazie per far parte di questo cammino di consapevolezza.</p>'
+        f'<p style="color:#B8B8AE;font-style:italic;margin-top:8px">Con gratitudine,<br/>Il team di {escape(_APP_NAME)}</p>'
+    )
+    return subj, body
+
+
+def render_renewal_reminder_1d(user_name: str, expires_iso: str) -> tuple[str, str]:
+    """Email inviata 1 giorno prima della scadenza (solo se auto_renew=True)."""
+    subj = "Domani il tuo abbonamento si rinnova automaticamente"
+    d = _fmt_date(expires_iso)
+    body = _wrap(
+        f'<p>Ciao <strong>{escape(user_name or "utente")}</strong>,</p>'
+        f'<p><strong>Domani</strong> ({escape(d)}) il tuo abbonamento annuale a '
+        f'<strong>{escape(_APP_NAME)}</strong> verrà rinnovato automaticamente '
+        f'(<strong>12&nbsp;€/anno</strong>) e potrai continuare il tuo percorso senza interruzioni.</p>'
+        f'<p>Se non desideri procedere con il rinnovo, hai tempo <strong>fino a domani</strong> '
+        f'per disattivarlo dalla tua area personale: <em>Profilo → Abbonamento</em>.</p>'
+        f'<p style="margin-top:20px">Buon cammino,</p>'
+        f'<p style="color:#B8B8AE;font-style:italic">Il team di {escape(_APP_NAME)}</p>'
+    )
+    return subj, body
+
+
+def render_renewed_thanks(user_name: str, new_expires_iso: str) -> tuple[str, str]:
+    """Email inviata il giorno del rinnovo, quando auto_renew=True e il rinnovo è avvenuto."""
+    subj = "Grazie per aver rinnovato — un altro anno insieme 🌱"
+    d = _fmt_date(new_expires_iso)
+    body = _wrap(
+        f'<p>Ciao <strong>{escape(user_name or "utente")}</strong>,</p>'
+        f'<p>Il tuo abbonamento a <strong>{escape(_APP_NAME)}</strong> è stato '
+        f'<strong style="color:{_BRAND_COLOR}">rinnovato con successo</strong>. '
+        f'Grazie di cuore per aver scelto di continuare a camminare con noi.</p>'
+        f'<p>Il tuo accesso ai contenuti premium, corsi, meditazioni e biblioteca è valido '
+        f'fino al <strong>{escape(d)}</strong>.</p>'
+        f'<p>Continua a esplorare, ascoltare, apprendere. Ci prendiamo cura del tuo tempo '
+        f'e della tua ricerca.</p>'
+        f'<p style="margin-top:20px">Con gratitudine,</p>'
+        f'<p style="color:#B8B8AE;font-style:italic">Il team di {escape(_APP_NAME)}</p>'
+    )
+    return subj, body
+
+
+def render_farewell_after_expire(user_name: str, purge_at_iso: str) -> tuple[str, str]:
+    """Email inviata il giorno della scadenza quando l'utente ha disdetto (auto_renew=False)."""
+    subj = "Grazie per il tempo trascorso insieme 🙏"
+    d = _fmt_date(purge_at_iso)
+    body = _wrap(
+        f'<p>Ciao <strong>{escape(user_name or "utente")}</strong>,</p>'
+        f'<p>Oggi termina il tuo abbonamento a <strong>{escape(_APP_NAME)}</strong>. '
+        f'<strong>Grazie</strong> per aver camminato con noi in questo periodo: '
+        f'è stato un privilegio farne parte.</p>'
+        f'<p>Ci auguriamo che i contenuti e i corsi seguiti ti abbiano lasciato qualcosa di buono. '
+        f'Se un giorno vorrai riprendere il tuo percorso, saremo qui ad accoglierti.</p>'
+        f'<div style="background:#0e1512;border:1px solid #222D28;border-radius:8px;padding:14px;margin:16px 0">'
+        f'<p style="margin:0 0 6px 0"><strong style="color:{_BRAND_COLOR}">📁 I tuoi progressi sono al sicuro per 6 mesi</strong></p>'
+        f'<p style="margin:0;font-size:13px;color:#B8B8AE">Corsi seguiti, quiz superati, certificati e preferiti '
+        f'resteranno salvati fino al <strong style="color:#F0F0EA">{escape(d)}</strong>. '
+        f'Se riattivi l&#39;abbonamento entro questa data, riprenderai esattamente da dove hai lasciato.</p>'
+        f'</div>'
+        f'<div style="background:#2a1a10;border:1px solid #4a2a18;border-radius:8px;padding:14px;margin:16px 0">'
+        f'<p style="margin:0 0 6px 0"><strong style="color:#e8a05a">⚠️ Dopo 6 mesi</strong></p>'
+        f'<p style="margin:0;font-size:13px;color:#d9b89a">I dati del percorso verranno rimossi e, '
+        f'in caso di ritorno, sarai considerato un nuovo utente.</p>'
+        f'</div>'
+        f'<p style="margin-top:20px">Con affetto e riconoscenza,</p>'
+        f'<p style="color:#B8B8AE;font-style:italic">Il team di {escape(_APP_NAME)}</p>'
     )
     return subj, body

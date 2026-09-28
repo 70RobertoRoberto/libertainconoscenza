@@ -18,6 +18,12 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
 - **Admin panel**: Statistiche, Articoli (manual + AI 60-line summarize), Video/Med. (**+ file upload** via Emergent Object Storage, streaming upload via expo-file-system con progress bar), YouTube import (RSS/Data API), Pubblicità (5-sec banner every 10 min), Sconti (coupons), Messaggi, Utenti, Ordini.
 - **Push notifications**: SuprSend relay via `/api/register-push`; new article/media/message triggers backend `send_push_bg`. Frontend has module-scope handlers, Android channel, tap listener + cold-start check.
 - **Referral Program**: every user gets a unique `referral_code` (admin's = `MAESTRO-2026`). Registration accepts optional `referral_code`; the referrer's `referral_count` increments. Profile shows the code and invited count + share.
+- **Subscription lifecycle emails (cron)**: daily APScheduler job at 09:00 Europe/Rome checks all users and:
+  - 7 days before expiry (auto_renew=true) → email "il tuo abbonamento si rinnoverà tra 7 giorni"
+  - 1 day before expiry (auto_renew=true) → email "domani si rinnova"
+  - Expiry day + auto_renew=true → mock renewal (+12 months) + "grazie per aver rinnovato"
+  - Expiry day + auto_renew=false → downgrade to free + purge_at = now+6mo + "grazie per il tempo insieme, dati salvati 6 mesi"
+  - Purge job: after 6 months of non-renewal → wipes course progress (enrollments, quiz_attempts, certificates, favorites, completions, comments, views). Idempotent via `subscription.reminders_sent` map. Admin can trigger manually via `POST /api/admin/subscriptions/run-daily-job`.
 
 ## Integrations
 - Emergent LLM key (GPT-4o-mini) for article AI summarization
