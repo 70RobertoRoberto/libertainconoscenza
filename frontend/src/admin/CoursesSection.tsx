@@ -1140,6 +1140,17 @@ function QuizEditor({
   );
   const [bands, setBands] = useState<Band[]>(quiz?.feedback_bands?.length ? (quiz!.feedback_bands as any) : []);
   const [saving, setSaving] = useState(false);
+  // Pool + Random extraction settings
+  const [poolMode, setPoolMode] = useState<boolean>(!!(quiz as any)?.questions_per_attempt);
+  const [qPerAttempt, setQPerAttempt] = useState<string>(
+    (quiz as any)?.questions_per_attempt ? String((quiz as any).questions_per_attempt) : ""
+  );
+  const [minDiff, setMinDiff] = useState<string>(
+    String((quiz as any)?.min_different_between_attempts ?? 2)
+  );
+  const [lockoutDays, setLockoutDays] = useState<string>(
+    String((quiz as any)?.retry_lockout_days ?? 15)
+  );
 
   const addBand = () => setBands((bs) => [...bs, { min_correct: 0, max_correct: 0, message: "" }]);
   const delBand = (i: number) => setBands((bs) => bs.filter((_, idx) => idx !== i));
@@ -1183,12 +1194,30 @@ function QuizEditor({
       if (filled.length < 2) return toast(`Domanda ${i + 1}: servono almeno 2 risposte`);
       if (!q.answers.some(a => a.is_correct && a.text.trim())) return toast(`Domanda ${i + 1}: manca risposta corretta`);
     }
+    // Pool + Random validation
+    const poolSize = questions.length;
+    const qpa = poolMode ? parseInt(qPerAttempt || "0", 10) : 0;
+    const md = parseInt(minDiff || "0", 10) || 0;
+    const lk = parseInt(lockoutDays || "0", 10) || 0;
+    if (poolMode) {
+      if (!qpa || qpa < 1) return toast("Domande per tentativo obbligatorio (min 1)");
+      if (qpa > poolSize) return toast(`Il pool ha ${poolSize} domande, non puoi estrarne ${qpa}`);
+      if (md > 0 && poolSize < qpa + md) {
+        return toast(`Per garantire ${md} domande diverse tra tentativi, servono almeno ${qpa + md} domande nel pool (ne hai ${poolSize}).`);
+      }
+      if (md > qpa) return toast(`Le domande diverse (${md}) non possono superare quelle per tentativo (${qpa}).`);
+    }
+    if (lk < 0) return toast("I giorni di attesa non possono essere negativi");
+
     setSaving(true);
     try {
       const payload = {
         questions: questions.map(q => ({ ...q, answers: q.answers.filter(a => a.text.trim()) })),
         pass_threshold: 0.7,
         max_attempts: 3,
+        questions_per_attempt: poolMode ? qpa : null,
+        min_different_between_attempts: poolMode ? md : 0,
+        retry_lockout_days: lk,
         feedback_bands: bands
           .filter(b => (b.message || "").trim())
           .map(b => ({
@@ -1238,6 +1267,58 @@ function QuizEditor({
           <Pressable onPress={addQuestion} style={s.primaryBtnSm2}>
             <Text style={s.primaryTxt}>+ Aggiungi domanda</Text>
           </Pressable>
+
+          {/* Pool + Random attempts */}
+          <View style={{ marginTop: spacing.xxl }}>
+            <Text style={s.h2}>Impostazioni tentativi</Text>
+            <Text style={{ color: colors.onSurfaceTertiary, fontSize: 12, marginTop: 4, marginBottom: spacing.md }}>
+              Attiva la modalità &quot;pool casuale&quot; per estrarre a caso un sottoinsieme di domande ad ogni tentativo. Utile per evitare che l&apos;utente memorizzi le risposte.
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md }}>
+              <Text style={s.label}>Pool casuale attivo</Text>
+              <Switch value={poolMode} onValueChange={setPoolMode} />
+            </View>
+            {poolMode ? (
+              <>
+                <Text style={s.label}>Domande da estrarre per tentativo</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="numeric"
+                  placeholder={`max ${questions.length}`}
+                  placeholderTextColor={colors.muted}
+                  value={qPerAttempt}
+                  onChangeText={(t) => setQPerAttempt(t.replace(/[^0-9]/g, ""))}
+                />
+                <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+                  Il pool contiene {questions.length} domande. Al quiz ne verranno estratte {qPerAttempt || "N"} a caso.
+                </Text>
+                <Text style={[s.label, { marginTop: spacing.md }]}>Domande diverse minime tra tentativi</Text>
+                <TextInput
+                  style={s.input}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={colors.muted}
+                  value={minDiff}
+                  onChangeText={(t) => setMinDiff(t.replace(/[^0-9]/g, ""))}
+                />
+                <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+                  Se l&apos;utente ritenta, almeno N domande saranno diverse rispetto al tentativo precedente. Serve pool ≥ {(parseInt(qPerAttempt || "0", 10) || 0) + (parseInt(minDiff || "0", 10) || 0)} domande.
+                </Text>
+              </>
+            ) : null}
+            <Text style={[s.label, { marginTop: spacing.md }]}>Giorni di attesa dopo aver esaurito i tentativi</Text>
+            <TextInput
+              style={s.input}
+              keyboardType="numeric"
+              placeholder="15"
+              placeholderTextColor={colors.muted}
+              value={lockoutDays}
+              onChangeText={(t) => setLockoutDays(t.replace(/[^0-9]/g, ""))}
+            />
+            <Text style={{ color: colors.muted, fontSize: 11, marginTop: 4 }}>
+              Se l&apos;utente fallisce tutti i 3 tentativi, dovrà attendere questi giorni prima di riprovare. Consigliato: 15.
+            </Text>
+          </View>
 
           {/* Feedback bands */}
           <View style={{ marginTop: spacing.xxl }}>

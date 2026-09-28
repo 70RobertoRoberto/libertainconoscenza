@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Platform,
 } from "react-native";
@@ -15,6 +15,11 @@ type QuizView = {
   attempts_used: number;
   passed: boolean;
   certificate_id: string | null;
+  pool_mode?: boolean;
+  questions_per_attempt?: number | null;
+  retry_lockout_days?: number;
+  locked_until?: string | null;
+  has_active_attempt?: boolean;
 };
 
 type AttemptResult = {
@@ -27,12 +32,27 @@ type AttemptResult = {
   per_question: { question_id: string; correct_index: number; user_index: number; is_correct: boolean; explanation: string }[];
   certificate_id: string | null;
   feedback?: string | null;
+  locked_until?: string | null;
 };
 
 function toast(t: string, m?: string) {
   const text = m ? `${t}\n\n${m}` : t;
   if (Platform.OS === "web") { if (typeof window !== "undefined") window.alert(text); return; }
   Alert.alert(t, m);
+}
+
+function fmtDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" });
+  } catch { return iso; }
+}
+
+function daysUntil(iso: string): number {
+  try {
+    const target = new Date(iso).getTime();
+    const now = Date.now();
+    return Math.max(0, Math.ceil((target - now) / (1000 * 60 * 60 * 24)));
+  } catch { return 0; }
 }
 
 export default function CourseQuizScreen() {
@@ -49,6 +69,42 @@ export default function CourseQuizScreen() {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+
+  // Kick off an attempt (extracts random subset if pool_mode). Runs once when
+  // the quiz-view is loaded, no active attempt is in progress, and the user is
+  // not already passed/locked/exhausted.
+  useEffect(() => {
+    if (!data || !id || result) return;
+    if (data.passed) return;
+    if (data.locked_until) return;
+    if (data.attempts_used >= data.max_attempts) return;
+    if (data.has_active_attempt) return; // resume existing attempt
+
+    let cancelled = false;
+    setStarting(true);
+    setStartError(null);
+    (async () => {
+      try {
+        await api(`/courses/${id}/quiz-view/start-attempt`, { method: "POST" });
+        if (!cancelled) await refetch();
+      } catch (e: any) {
+        if (!cancelled) {
+          // 423 = lockout; refetch to pull the locked_until date and let the UI handle it
+          if (e?.status === 423) {
+            await refetch();
+          } else {
+            setStartError(e?.message || "Errore avvio quiz");
+          }
+        }
+      } finally {
+        if (!cancelled) setStarting(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.passed, data?.locked_until, data?.has_active_attempt, id]);
 
   const allAnswered = useMemo(
     () => (data ? data.questions.every((q) => answers[q.id] != null) : false),
@@ -58,7 +114,9 @@ export default function CourseQuizScreen() {
   if (isLoading || !data) return <View style={s.centered}><ActivityIndicator color={colors.brandPrimary} /></View>;
 
   const remaining = Math.max(0, data.max_attempts - data.attempts_used);
-  const exhausted = remaining <= 0 && !data.passed;
+  const lockedUntil = result?.locked_until || data.locked_until || null;
+  const isLocked = !!(lockedUntil && new Date(lockedUntil).getTime() > Date.now());
+  const exhausted = !isLocked && remaining <= 0 && !data.passed;
 
   const submit = async () => {
     if (!allAnswered) return toast("Rispondi a tutte le domande");
@@ -70,12 +128,19 @@ export default function CourseQuizScreen() {
       });
       setResult(r);
     } catch (e: any) {
-      toast("Errore", e?.message || "-");
+      if (e?.status === 423) {
+        // Lockout came in mid-flight; refetch to sync state
+        await refetch();
+        toast("Tentativi esauriti", "Riprova dopo il periodo di attesa indicato.");
+      } else {
+        toast("Errore", e?.message || "-");
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
+  // ---- Result screen (post-submit) ----
   if (result) {
     return (
       <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.xl, paddingBottom: 40 }}>
@@ -106,6 +171,17 @@ export default function CourseQuizScreen() {
           >
             <Text style={s.btnPrimaryTxt}>🏆  Vedi il tuo certificato</Text>
           </Pressable>
+        ) : result.locked_until ? (
+          <View style={s.lockBox}>
+            <Text style={s.lockTitle}>⏳  Ripassa il corso</Text>
+            <Text style={s.lockTxt}>
+              Hai completato tutti i {result.max_attempts} tentativi disponibili. Ti consigliamo di ripassare i moduli con calma.
+            </Text>
+            <Text style={s.lockTxt}>
+              Potrai fare un nuovo tentativo dal <Text style={s.lockDate}>{fmtDate(result.locked_until)}</Text>
+              {" "}(fra {daysUntil(result.locked_until)} giorni), se vorrai ottenere il certificato.
+            </Text>
+          </View>
         ) : result.attempts_used < result.max_attempts ? (
           <Pressable
             onPress={() => { setResult(null); setAnswers({}); refetch(); }}
@@ -156,6 +232,7 @@ export default function CourseQuizScreen() {
     );
   }
 
+  // ---- Quiz page (pre-submit) ----
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <View style={[s.header, { paddingTop: insets.top + 8 }]}>
@@ -164,6 +241,7 @@ export default function CourseQuizScreen() {
           <Text style={s.headerTitle}>Quiz finale</Text>
           <Text style={s.headerSub}>
             Soglia {Math.round(data.pass_threshold * 100)}% · Tentativi: {data.attempts_used}/{data.max_attempts}
+            {data.pool_mode && data.questions_per_attempt ? ` · ${data.questions_per_attempt} domande random` : ""}
           </Text>
         </View>
       </View>
@@ -181,11 +259,40 @@ export default function CourseQuizScreen() {
             </Pressable>
           ) : null}
         </View>
+      ) : isLocked ? (
+        <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingTop: spacing.xxl }}>
+          <View style={s.lockBox}>
+            <Text style={s.lockBig}>⏳</Text>
+            <Text style={s.lockTitle}>Ripassa il corso</Text>
+            <Text style={s.lockTxt}>
+              Hai utilizzato tutti i {data.max_attempts} tentativi disponibili. Ti consigliamo di ripassare i moduli con calma.
+            </Text>
+            <Text style={s.lockTxt}>
+              Potrai fare un nuovo tentativo dal <Text style={s.lockDate}>{fmtDate(lockedUntil!)}</Text>
+              {" "}(fra {daysUntil(lockedUntil!)} giorni), se vorrai ottenere il certificato.
+            </Text>
+          </View>
+          <Pressable onPress={() => router.replace(`/course/${id}` as any)} style={[s.btn, s.btnPrimary, { marginTop: spacing.xl }]}>
+            <Text style={s.btnPrimaryTxt}>Torna al corso e ripassa</Text>
+          </Pressable>
+        </ScrollView>
       ) : exhausted ? (
         <View style={s.centered}>
           <Text style={{ color: colors.onSurface, fontSize: 16, textAlign: "center" }}>
             Hai esaurito i {data.max_attempts} tentativi. Rientra nel corso più avanti per riprovare.
           </Text>
+        </View>
+      ) : starting ? (
+        <View style={s.centered}>
+          <ActivityIndicator color={colors.brandPrimary} />
+          <Text style={{ color: colors.muted, marginTop: 12 }}>Preparazione domande…</Text>
+        </View>
+      ) : startError ? (
+        <View style={s.centered}>
+          <Text style={{ color: colors.onSurface, textAlign: "center" }}>{startError}</Text>
+          <Pressable onPress={() => refetch()} style={[s.btn, s.btnPrimary, { marginTop: spacing.lg }]}>
+            <Text style={s.btnPrimaryTxt}>Riprova</Text>
+          </Pressable>
         </View>
       ) : (
         <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}>
@@ -290,5 +397,33 @@ const s = StyleSheet.create({
   sectionTitle: {
     color: colors.brandPrimary, fontSize: 12, fontWeight: "800", letterSpacing: 2,
     textTransform: "uppercase", marginTop: spacing.xl, marginBottom: spacing.sm,
+  },
+  lockBox: {
+    padding: spacing.xl,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceSecondary,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    alignItems: "center",
+    marginTop: spacing.md,
+  },
+  lockBig: { fontSize: 56, marginBottom: spacing.md },
+  lockTitle: {
+    color: colors.brandPrimary,
+    fontSize: 18,
+    fontWeight: "800",
+    marginBottom: spacing.md,
+    textAlign: "center",
+  },
+  lockTxt: {
+    color: colors.onSurface,
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: spacing.md,
+    textAlign: "center",
+  },
+  lockDate: {
+    color: colors.brandPrimary,
+    fontWeight: "800",
   },
 });

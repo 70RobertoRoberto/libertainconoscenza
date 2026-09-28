@@ -66,7 +66,10 @@ export async function api<T = any>(
     ) {
       await setToken(null);
     }
-    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    const err: any = new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+    err.status = res.status;
+    err.detail = data && data.detail;
+    throw err;
   }
   return data as T;
 }

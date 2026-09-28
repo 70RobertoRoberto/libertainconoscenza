@@ -68,6 +68,11 @@ class QuizIn(BaseModel):
     pass_threshold: float = 0.70
     max_attempts: int = 3
     feedback_bands: List[QuizFeedbackBand] = []
+    # Pool + Random extraction settings. When `questions_per_attempt` is None
+    # or 0, the quiz behaves like before (all questions shown every time).
+    questions_per_attempt: Optional[int] = None
+    min_different_between_attempts: int = 0
+    retry_lockout_days: int = 15  # days to wait after exhausting all attempts
 
 
 class CoursePromo(BaseModel):
@@ -161,6 +166,7 @@ def _topic_out(d: dict) -> dict:
 
 
 def _quiz_out(d: dict) -> dict:
+    qpa = d.get("questions_per_attempt")
     return {
         "id": d.get("id"),
         "course_id": d["course_id"],
@@ -168,6 +174,9 @@ def _quiz_out(d: dict) -> dict:
         "pass_threshold": float(d.get("pass_threshold", 0.7)),
         "max_attempts": int(d.get("max_attempts", 3)),
         "feedback_bands": d.get("feedback_bands", []),
+        "questions_per_attempt": int(qpa) if qpa else None,
+        "min_different_between_attempts": int(d.get("min_different_between_attempts", 0) or 0),
+        "retry_lockout_days": int(d.get("retry_lockout_days", 15) or 15),
         "created_at": d.get("created_at"),
         "updated_at": d.get("updated_at"),
     }
@@ -450,11 +459,45 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             correct = sum(1 for a in q.answers if a.is_correct)
             if correct != 1:
                 raise HTTPException(400, f"Domanda {i}: deve esserci esattamente 1 risposta corretta")
+
+        # Pool + Random settings validation
+        pool_size = len(inp.questions)
+        qpa = inp.questions_per_attempt or None
+        min_diff = int(inp.min_different_between_attempts or 0)
+        lockout = int(inp.retry_lockout_days or 15)
+
+        if qpa is not None:
+            if qpa < 1:
+                raise HTTPException(400, "Il numero di domande per tentativo deve essere almeno 1")
+            if qpa > pool_size:
+                raise HTTPException(400, f"Il pool ha solo {pool_size} domande, non puoi estrarne {qpa}")
+        if min_diff < 0:
+            raise HTTPException(400, "Il minimo di domande diverse non può essere negativo")
+        if qpa is not None and min_diff > 0:
+            # Per garantire M diverse dal set precedente serve pool >= qpa + min_diff
+            if pool_size < qpa + min_diff:
+                raise HTTPException(
+                    400,
+                    f"Per garantire almeno {min_diff} domande diverse tra i tentativi, "
+                    f"il pool deve avere almeno {qpa + min_diff} domande (attualmente {pool_size}).",
+                )
+            if min_diff > qpa:
+                raise HTTPException(
+                    400,
+                    f"Il minimo di domande diverse ({min_diff}) non può superare "
+                    f"il numero di domande per tentativo ({qpa}).",
+                )
+        if lockout < 0:
+            raise HTTPException(400, "I giorni di attesa dopo l'esaurimento tentativi non possono essere negativi")
+
         payload = {
             "questions": [q.model_dump() for q in inp.questions],
             "pass_threshold": float(inp.pass_threshold or 0.7),
             "max_attempts": int(inp.max_attempts or 3),
             "feedback_bands": [b.model_dump() for b in (inp.feedback_bands or [])],
+            "questions_per_attempt": qpa,
+            "min_different_between_attempts": min_diff,
+            "retry_lockout_days": lockout,
             "updated_at": _now(),
         }
         existing = await db.course_quizzes.find_one({"course_id": course_id})
@@ -615,9 +658,35 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
         doc = await db.course_quizzes.find_one({"course_id": course_id})
         if not doc:
             raise HTTPException(404, "Quiz non disponibile")
-        # Strip is_correct + explanation from public payload
+
+        # Check lockout after exhausted attempts
+        lock_until = enrollment.get("quiz_locked_until")
+        locked_until_iso: Optional[str] = None
+        if lock_until:
+            try:
+                lu = datetime.fromisoformat(str(lock_until).replace("Z", "+00:00"))
+                if lu > datetime.now(timezone.utc):
+                    locked_until_iso = lu.isoformat()
+            except Exception:
+                pass
+
+        all_questions = doc.get("questions", [])
+        qpa = doc.get("questions_per_attempt")
+        # Determine which questions to show: active_quiz_question_ids if set (attempt in progress),
+        # otherwise all pool questions (admin can still see, or non-pool quiz)
+        active_ids = enrollment.get("active_quiz_question_ids") or []
+        if active_ids:
+            id_set = set(active_ids)
+            filtered = [q for q in all_questions if q["id"] in id_set]
+            # Preserve extraction order
+            order_map = {qid: i for i, qid in enumerate(active_ids)}
+            filtered.sort(key=lambda q: order_map.get(q["id"], 0))
+            questions_source = filtered
+        else:
+            questions_source = all_questions
+
         questions = []
-        for q in doc.get("questions", []):
+        for q in questions_source:
             questions.append({
                 "id": q["id"],
                 "text": q["text"],
@@ -630,7 +699,108 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "attempts_used": int(enrollment.get("quiz_attempts", 0)),
             "passed": bool(enrollment.get("quiz_passed")),
             "certificate_id": enrollment.get("certificate_id"),
+            "pool_mode": bool(qpa),
+            "questions_per_attempt": int(qpa) if qpa else None,
+            "retry_lockout_days": int(doc.get("retry_lockout_days", 15) or 15),
+            "locked_until": locked_until_iso,
+            "has_active_attempt": bool(active_ids),
         }
+
+    @router.post("/courses/{course_id}/quiz-view/start-attempt", dependencies=[Depends(current_user)])
+    async def user_quiz_start_attempt(course_id: str, user: dict = Depends(current_user)):
+        """Prepare a new attempt: extract N random questions from the pool
+        (ensuring at least M are different from the previous attempt), and
+        persist the extracted question_ids on the enrollment so a page reload
+        does not re-shuffle the questions mid-attempt.
+
+        For quizzes without pool config (questions_per_attempt = None), this is
+        a no-op that simply returns the full quiz.
+        """
+        import random
+
+        enrollment = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user["id"]})
+        if not enrollment:
+            raise HTTPException(403, "Non iscritto al corso")
+        if enrollment.get("quiz_passed"):
+            raise HTTPException(400, "Quiz già superato")
+
+        # Lockout check
+        lock_until = enrollment.get("quiz_locked_until")
+        if lock_until:
+            try:
+                lu = datetime.fromisoformat(str(lock_until).replace("Z", "+00:00"))
+                if lu > datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=423,
+                        detail={
+                            "message": "Hai esaurito i tentativi. Ripassa il corso e riprova alla data indicata.",
+                            "locked_until": lu.isoformat(),
+                        },
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+        quiz = await db.course_quizzes.find_one({"course_id": course_id})
+        if not quiz:
+            raise HTTPException(404, "Quiz non disponibile")
+
+        used = int(enrollment.get("quiz_attempts", 0))
+        max_attempts = int(quiz.get("max_attempts", 3))
+        if used >= max_attempts:
+            raise HTTPException(400, f"Tentativi esauriti ({used}/{max_attempts})")
+
+        all_qs = quiz.get("questions", [])
+        pool_size = len(all_qs)
+        qpa = quiz.get("questions_per_attempt")
+        min_diff = int(quiz.get("min_different_between_attempts", 0) or 0)
+
+        # No pool mode → return all questions unchanged, no persisted extraction
+        if not qpa or qpa >= pool_size:
+            await db.course_enrollments.update_one(
+                {"course_id": course_id, "user_id": user["id"]},
+                {"$unset": {"active_quiz_question_ids": ""}},
+            )
+            return {"extracted_ids": [q["id"] for q in all_qs], "pool_mode": False}
+
+        # Reuse existing active attempt if present (page reload safety)
+        active_ids = enrollment.get("active_quiz_question_ids") or []
+        if active_ids and len(active_ids) == qpa and set(active_ids).issubset({q["id"] for q in all_qs}):
+            return {"extracted_ids": active_ids, "pool_mode": True, "resumed": True}
+
+        # Load previous attempt's used question_ids (if any)
+        prev = await db.quiz_attempts.find_one(
+            {"course_id": course_id, "user_id": user["id"]},
+            sort=[("attempted_at", -1)],
+        )
+        prev_ids = list((prev or {}).get("question_ids_used") or [])
+
+        # Random extraction
+        all_ids = [q["id"] for q in all_qs]
+        rng = random.Random()
+
+        if not prev_ids or min_diff <= 0:
+            extracted = rng.sample(all_ids, qpa)
+        else:
+            # 1. Pick min_diff questions that are NOT in prev_ids
+            not_in_prev = [qid for qid in all_ids if qid not in prev_ids]
+            take_new = min(min_diff, len(not_in_prev), qpa)
+            new_part = rng.sample(not_in_prev, take_new)
+
+            # 2. Fill the rest from the whole pool minus already picked
+            remaining_pool = [qid for qid in all_ids if qid not in new_part]
+            fill_count = qpa - take_new
+            fill_part = rng.sample(remaining_pool, fill_count) if fill_count > 0 else []
+
+            extracted = new_part + fill_part
+            rng.shuffle(extracted)  # randomize display order
+
+        await db.course_enrollments.update_one(
+            {"course_id": course_id, "user_id": user["id"]},
+            {"$set": {"active_quiz_question_ids": extracted}},
+        )
+        return {"extracted_ids": extracted, "pool_mode": True, "resumed": False}
 
     @router.post("/courses/{course_id}/quiz-view/attempt", dependencies=[Depends(current_user)])
     async def user_quiz_attempt(course_id: str, inp: AttemptIn, user: dict = Depends(current_user)):
@@ -639,6 +809,25 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             raise HTTPException(403, "Non iscritto al corso")
         if enrollment.get("quiz_passed"):
             raise HTTPException(400, "Quiz già superato")
+
+        # Lockout check
+        lock_until = enrollment.get("quiz_locked_until")
+        if lock_until:
+            try:
+                lu = datetime.fromisoformat(str(lock_until).replace("Z", "+00:00"))
+                if lu > datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=423,
+                        detail={
+                            "message": "Hai esaurito i tentativi. Ripassa il corso e riprova alla data indicata.",
+                            "locked_until": lu.isoformat(),
+                        },
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
         quiz = await db.course_quizzes.find_one({"course_id": course_id})
         if not quiz:
             raise HTTPException(404, "Quiz non disponibile")
@@ -647,11 +836,20 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
         if used >= max_attempts:
             raise HTTPException(400, f"Tentativi esauriti ({used}/{max_attempts})")
 
+        # Determine question set to grade: prefer active extraction, else full pool
+        active_ids = enrollment.get("active_quiz_question_ids") or []
+        all_questions = quiz.get("questions", [])
+        if active_ids:
+            id_set = set(active_ids)
+            graded_questions = [q for q in all_questions if q["id"] in id_set]
+        else:
+            graded_questions = all_questions
+
         # Evaluate
         correct_count = 0
         total = 0
         per_question = []
-        for q in quiz.get("questions", []):
+        for q in graded_questions:
             total += 1
             answers = q.get("answers", [])
             correct_idx = next((i for i, a in enumerate(answers) if a.get("is_correct")), -1)
@@ -682,9 +880,13 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             "score": score,
             "passed": passed,
             "answers": inp.answers,
+            "question_ids_used": [q["id"] for q in graded_questions],
             "attempted_at": _now(),
         })
-        update = {"quiz_attempts": used + 1}
+        new_attempts = used + 1
+        update: dict = {"quiz_attempts": new_attempts}
+        unset: dict = {"active_quiz_question_ids": ""}  # clear active set after grading
+
         certificate_id = enrollment.get("certificate_id")
         _course_title_for_email = None
         if passed:
@@ -700,9 +902,21 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
             })
             update["quiz_passed"] = True
             update["certificate_id"] = certificate_id
+            # Clear any lockout on success
+            unset["quiz_locked_until"] = ""
+        else:
+            # If just exhausted all attempts on this failed submission → set lockout window
+            if new_attempts >= max_attempts:
+                lockout_days = int(quiz.get("retry_lockout_days", 15) or 15)
+                lock_until_dt = datetime.now(timezone.utc) + timedelta(days=lockout_days)
+                update["quiz_locked_until"] = lock_until_dt.isoformat()
+                # Reset attempts counter so, after the lockout expires, the user
+                # starts a fresh cycle of max_attempts tries.
+                update["quiz_attempts"] = 0
+
         await db.course_enrollments.update_one(
             {"course_id": course_id, "user_id": user["id"]},
-            {"$set": update},
+            {"$set": update, "$unset": unset},
         )
         # Send certificate email (best-effort)
         if passed and user.get("email") and _course_title_for_email:
@@ -716,16 +930,22 @@ def build_courses_router(db, current_user, require_admin) -> APIRouter:
                 await send_email(to=user["email"], subject=subj, html=html)
             except Exception:
                 pass
+        # Compute locked_until to return in response so the frontend can show the
+        # "ripassa il corso" screen immediately.
+        response_locked_until: Optional[str] = None
+        if not passed and new_attempts >= max_attempts:
+            response_locked_until = update.get("quiz_locked_until")
         return {
             "score": score,
             "correct_count": correct_count,
             "total_questions": total,
             "passed": passed,
-            "attempts_used": used + 1,
+            "attempts_used": new_attempts if not (not passed and new_attempts >= max_attempts) else max_attempts,
             "max_attempts": max_attempts,
             "per_question": per_question,
             "certificate_id": certificate_id if passed else None,
             "feedback": _match_feedback_band(quiz.get("feedback_bands", []), correct_count),
+            "locked_until": response_locked_until,
         }
 
     @router.get("/me/enrollments", dependencies=[Depends(current_user)])
