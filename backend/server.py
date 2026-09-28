@@ -2201,7 +2201,6 @@ async def admin_upload(file: UploadFile = File(...)):
         raise HTTPException(413, "File troppo grande (max 300MB)")
     if not ext:
         ext = "bin"
-    path = f"{APP_NAME}/uploads/{uuid.uuid4()}.{ext}"
     # Normalise mime for storage (avoid saving octet-stream when we know the ext)
     saved_mime = file.content_type or ""
     if saved_mime in ("", "application/octet-stream"):
@@ -2216,6 +2215,17 @@ async def admin_upload(file: UploadFile = File(...)):
             "png": "image/png", "webp": "image/webp",
         }
         saved_mime = ext_to_mime.get(ext, "application/octet-stream")
+
+    # Compress media (images to WebP, audio to AAC 96k, video to H.264 720p).
+    # Falls back to the original bytes on any error — never blocks the upload.
+    original_size = len(data)
+    try:
+        from media_processor import compress_media
+        data, ext, saved_mime = await run_in_threadpool(compress_media, data, filename, saved_mime)
+    except Exception as e:
+        logger.warning(f"Media compression skipped for {filename}: {e}")
+
+    path = f"{APP_NAME}/uploads/{uuid.uuid4()}.{ext}"
     result = await run_in_threadpool(_put_object_sync, path, data, saved_mime)
     stored_path = result.get("path", path)
     # persist metadata
@@ -2224,23 +2234,58 @@ async def admin_upload(file: UploadFile = File(...)):
         "path": stored_path,
         "mime": saved_mime,
         "size": len(data),
+        "original_size": original_size,
         "filename": filename,
         "created_at": now_iso(),
     })
     public_url = f"/api/files/{stored_path}"
-    return {"path": stored_path, "url": public_url, "size": len(data), "mime": saved_mime, "filename": filename}
+    return {
+        "path": stored_path,
+        "url": public_url,
+        "size": len(data),
+        "original_size": original_size,
+        "mime": saved_mime,
+        "filename": filename,
+    }
 
 
 @api.get("/files/{path:path}")
-async def get_file(path: str):
-    """Serve a stored file. Public because embedded media needs to load without headers."""
+async def get_file(path: str, request: Request):
+    """Serve a stored file. Public because embedded media needs to load without headers.
+
+    Cache strategy: file paths contain UUIDs and never change once uploaded, so
+    we can safely serve with `immutable, max-age=1y`. This makes the client
+    (browser/app) fetch each file ONCE and re-use the cached copy forever,
+    slashing egress bandwidth on Emergent Object Storage.
+    """
+    # Conditional request handling — if the client sends If-None-Match with the
+    # same ETag we already know, respond 304 without fetching the file body.
+    etag = f'W/"{hash(path) & 0xffffffff:x}"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(
+            status_code=304,
+            headers={
+                "ETag": etag,
+                "Cache-Control": "public, max-age=31536000, immutable",
+            },
+        )
     try:
         data, ctype = await run_in_threadpool(_get_object_sync, path)
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(404, "File non trovato")
-    return Response(content=data, media_type=ctype)
+    return Response(
+        content=data,
+        media_type=ctype,
+        headers={
+            # 1 year cache — safe because paths are UUID-based and never mutate.
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "ETag": etag,
+            # Allow range requests on audio/video so mobile players can seek/scrub.
+            "Accept-Ranges": "bytes",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

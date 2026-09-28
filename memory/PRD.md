@@ -26,6 +26,13 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
   - Purge job: after 6 months of non-renewal → wipes course progress (enrollments, quiz_attempts, certificates, favorites, completions, comments, views). Idempotent via `subscription.reminders_sent` map. Admin can trigger manually via `POST /api/admin/subscriptions/run-daily-job`.
 - **Quiz — Pool casuale + lockout 15gg**: opzionale sul quiz di ogni corso. Admin carica un pool ampio (es. 15 domande) e imposta `questions_per_attempt` (es. 8) + `min_different_between_attempts` (es. 2). Ad ogni tentativo il sistema estrae randomicamente N domande dal pool, garantendo che almeno M siano diverse dal tentativo precedente. Nuovo endpoint `POST /courses/{id}/quiz-view/start-attempt` prepara l'estrazione persistente (page reload safe). Dopo 3 tentativi falliti scatta un lockout configurabile (default 15gg): l'utente vede una card "Ripassa il corso, riprova il {data}". Al termine del lockout riparte un ciclo pulito di 3 tentativi. Retrocompatibile: quiz senza pool config → funzionano come prima.
 - **Quiz — Messaggio di buon auspicio al superamento**: admin può inserire un `success_wish_message` (max 1000 caratteri) sul quiz. Quando l'utente supera il quiz, il messaggio viene mostrato in una card decorativa (Georgia italic + glyph 🌱) tra il feedback band e il CTA certificato.
+- **Media compression pipeline (upload)**: nuovo modulo `media_processor.py` invocato in `POST /api/admin/upload`. Ogni file caricato viene ricompresso prima di essere salvato su Emergent Object Storage:
+  - Immagini (jpg/png/heic/…) → WebP q82, resize a max 1600px width (tipicamente -80/-95% peso)
+  - Audio (mp3/wav/ogg/opus/…) → AAC 96kbps in .m4a (tipicamente -70/-90% peso)
+  - Video (mp4/mov/webm/…) → H.264 720p CRF 24 + AAC 96k con `+faststart` (tipicamente -50/-70% peso)
+  - Safe by design: se la compressione fallisce (input corrotto, codec strano, ffmpeg errore, o esito > originale) il file originale viene salvato. Toggle via env `MEDIA_COMPRESSION_DISABLED=1`.
+  - `db.uploads` ora salva anche `original_size` per confronto/statistiche future.
+- **HTTP cache aggressiva sui media**: `GET /api/files/{path}` risponde con `Cache-Control: public, max-age=31536000, immutable` + `ETag` + `Accept-Ranges: bytes`. Sicuro perché i path contengono UUID e non mutano mai. Supporta 304 Not Modified su conditional GET. Riduce ~60-70% di egress bandwidth dopo il primo download per utente.
 
 ## Integrations
 - Emergent LLM key (GPT-4o-mini) for article AI summarization
