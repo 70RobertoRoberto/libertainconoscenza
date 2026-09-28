@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Pressable, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, Pressable, TextInput, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
@@ -43,6 +43,7 @@ export default function Paywall() {
     setLoading(true);
     setMsg("");
     try {
+      // Step 1 — create pending order on our backend
       const r = await api<any>("/billing/checkout", {
         method: "POST",
         body: JSON.stringify({
@@ -51,10 +52,21 @@ export default function Paywall() {
           email: email.trim().toLowerCase(),
         }),
       });
-      setMsg(
-        r.message ||
-          "✅ Richiesta inviata!\n\nLa tua richiesta di abbonamento è stata registrata.\nSarai contattato al più presto per completare il pagamento e attivare l'accesso Premium.",
+      // Step 2 — obtain Stripe Checkout Session URL
+      const stripeRes = await api<any>(
+        `/payments/stripe/checkout/subscription?order_id=${encodeURIComponent(r.order_id)}`,
+        { method: "POST" },
       );
+      // Step 3 — redirect user to Stripe hosted checkout
+      const WebBrowser = await import("expo-web-browser");
+      if (Platform.OS === "web") {
+        if (typeof window !== "undefined") {
+          window.location.href = stripeRes.url;
+        }
+      } else {
+        await WebBrowser.openBrowserAsync(stripeRes.url, { showTitle: true, enableBarCollapsing: true });
+      }
+      setMsg("Ti stiamo reindirizzando a Stripe per completare il pagamento in sicurezza…");
     } catch (e: any) {
       setMsg(e.message);
     } finally {
@@ -116,9 +128,9 @@ export default function Paywall() {
         ))}
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>{"ℹ️  Come funziona l'attivazione"}</Text>
+          <Text style={styles.infoTitle}>{"🔒  Pagamento sicuro con Stripe"}</Text>
           <Text style={styles.infoBody}>
-            {"Al termine della prova di 15 giorni, sottoscrivi l'abbonamento annuale a soli 12€. La richiesta ci arriva e ti contatteremo per completare il pagamento (bonifico, contanti o accordo diretto) e attiveremo il tuo accesso Premium entro poche ore."}
+            {"Il pagamento avviene tramite Stripe, uno dei sistemi più sicuri al mondo. Puoi pagare con Visa, Mastercard, American Express e carte prepagate. Attivazione istantanea al termine della transazione, ricevi la ricevuta via email."}
           </Text>
         </View>
 
@@ -197,7 +209,7 @@ export default function Paywall() {
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.md }]}>
         <GoldButton
           testID="checkout-btn"
-          label={loading ? "Invio in corso…" : "Richiedi attivazione"}
+          label={loading ? "Reindirizzamento…" : "Paga in sicurezza · Stripe"}
           onPress={submit}
           loading={loading}
         />

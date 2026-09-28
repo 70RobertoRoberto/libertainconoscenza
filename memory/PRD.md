@@ -33,6 +33,20 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
   - Safe by design: se la compressione fallisce (input corrotto, codec strano, ffmpeg errore, o esito > originale) il file originale viene salvato. Toggle via env `MEDIA_COMPRESSION_DISABLED=1`.
   - `db.uploads` ora salva anche `original_size` per confronto/statistiche future.
 - **HTTP cache aggressiva sui media**: `GET /api/files/{path}` risponde con `Cache-Control: public, max-age=31536000, immutable` + `ETag` + `Accept-Ranges: bytes`. Sicuro perché i path contengono UUID e non mutano mai. Supporta 304 Not Modified su conditional GET. Riduce ~60-70% di egress bandwidth dopo il primo download per utente.
+- **Stripe integration (Emergent proxy)**: pagamenti reali attivi via `emergentintegrations.payments.stripe.checkout.StripeCheckout`:
+  - Nuovo modulo `stripe_service.py`
+  - Endpoint `/api/payments/stripe/config`, `.../checkout/subscription`, `.../checkout/course`, `.../session/{id}`, `.../webhook`
+  - Flusso: paywall → crea order pending → chiama Stripe Checkout → apre URL con `expo-web-browser` → utente paga con carta Visa/MC/Amex → torna a `/payment-success` → verifica sessione + fulfillment idempotente
+  - Corsi Premium: `POST /api/payments/stripe/checkout/course` con `{course_id, coupon_code, email}` → crea `course_orders` pending → Stripe Checkout → fulfillment auto-enrolla l'utente al corso al successo
+  - Nuove pagine: `/payment-success` (con polling della session status), `/payment-cancel`
+  - Idempotenza via `db.stripe_events` (event_id unique) e stato `orders/course_orders`
+  - Note: usiamo one-time Checkout Session; il rinnovo annuale è gestito dal nostro APScheduler cron (invia email "Rinnova ora" 7gg prima della scadenza con link a nuova Checkout). Quando l'utente collegherà il suo account Stripe personale con chiavi reali, si potrà switchare al vero flow Subscription API con carta salvata.
+- **Landing Gated per link condivisi**: nuovo componente `src/GatedLanding.tsx` e endpoint pubblici `/api/public/{meditation,course,article}/{id}` (senza auth). Quando un utente non loggato apre un link condiviso a un contenuto, vede:
+  - Titolo, immagine cover, categoria, durata, descrizione breve (marketing)
+  - Se corso Premium: prezzo
+  - Card CTA "Registrati gratis" + "Ho già un account · Accedi"
+  - Zero content leak: audio/video/body articolo/capitoli non vengono mai serviti a utenti non autenticati.
+  - Le pagine `/media/[id]`, `/course/[id]`, `/article/[id]` rilevano lo stato guest via `auth.hasToken()` e mostrano `GatedLanding` invece di chiamare l'API protetta.
 
 ## Integrations
 - Emergent LLM key (GPT-4o-mini) for article AI summarization

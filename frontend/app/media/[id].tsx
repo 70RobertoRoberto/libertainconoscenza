@@ -13,12 +13,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, auth } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted, GoldButton } from "@/src/ui";
 import { AudioPlayer } from "@/src/AudioPlayer";
 import { useLang, catLabel } from "@/src/i18n";
 import AddToPlaylistModal from "@/src/AddToPlaylistModal";
+import GatedLanding from "@/src/GatedLanding";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -27,11 +28,16 @@ export default function MediaDetail() {
   const [fav, setFav] = useState(false);
   const [addPlOpen, setAddPlOpen] = useState(false);
   const { lang, t } = useLang();
+  const [authChecked, setAuthChecked] = useState<null | boolean>(null); // null=checking, true=logged, false=guest
+
+  useEffect(() => {
+    auth.hasToken().then((yes) => setAuthChecked(yes));
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["media", id, lang],
     queryFn: () => api<any>(`/media/${id}?lang=${lang}`),
-    enabled: !!id,
+    enabled: !!id && authChecked === true,
   });
 
   useEffect(() => {
@@ -55,6 +61,11 @@ export default function MediaDetail() {
         <ActivityIndicator color={colors.brandPrimary} />
       </View>
     );
+  }
+
+  // Guest visitor → show gated landing (marketing preview, no content leak)
+  if (authChecked === false && id) {
+    return <GatedLanding contentType="meditation" contentId={id as string} />;
   }
 
   if (error) {

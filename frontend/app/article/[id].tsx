@@ -16,11 +16,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import FontAwesome6 from "@react-native-vector-icons/fontawesome6";
 import { colors, spacing, radius } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, auth } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
 import Markdown from "react-native-markdown-display";
+import GatedLanding from "@/src/GatedLanding";
 
 export default function ArticleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,18 +29,23 @@ export default function ArticleDetail() {
   const insets = useSafeAreaInsets();
   const [fav, setFav] = useState(false);
   const { lang, t } = useLang();
+  const [authChecked, setAuthChecked] = useState<null | boolean>(null);
+
+  useEffect(() => {
+    auth.hasToken().then((yes) => setAuthChecked(yes));
+  }, []);
 
   const { data, isLoading } = useQuery({
     queryKey: ["article", id, lang],
     queryFn: () => api<any>(`/articles/${id}?lang=${lang}`),
-    enabled: !!id,
+    enabled: !!id && authChecked === true,
   });
 
   const qc = useQueryClient();
   const { data: comments } = useQuery({
     queryKey: ["comments", id],
     queryFn: () => api<{ items: any[] }>(`/comments?content_id=${id}`),
-    enabled: !!id,
+    enabled: !!id && authChecked === true,
   });
   const [newComment, setNewComment] = useState("");
   const [posting, setPosting] = useState(false);
@@ -72,6 +78,11 @@ export default function ArticleDetail() {
       setFav(!!r.favorited);
     } catch {}
   };
+
+  // Guest visitor → gated landing (marketing preview, no content leak)
+  if (authChecked === false && id) {
+    return <GatedLanding contentType="article" contentId={id as string} />;
+  }
 
   if (isLoading || !data) {
     return (

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Image, Pressable, TextInput,
   ActivityIndicator, RefreshControl, Alert, Platform,
@@ -7,8 +7,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
-import { api } from "@/src/api";
+import { api, auth } from "@/src/api";
 import { RichViewer } from "@/src/RichEditor";
+import GatedLanding from "@/src/GatedLanding";
 
 type CourseDetail = {
   course: {
@@ -49,10 +50,15 @@ export default function CourseDetailScreen() {
   const insets = useSafeAreaInsets();
   const qc = useQueryClient();
 
+  const [authChecked, setAuthChecked] = useState<null | boolean>(null);
+  useEffect(() => {
+    auth.hasToken().then((yes) => setAuthChecked(yes));
+  }, []);
+
   const { data, refetch, isFetching, isLoading } = useQuery({
     queryKey: ["u-course", id],
     queryFn: () => api<CourseDetail>(`/courses/${id}`),
-    enabled: !!id,
+    enabled: !!id && authChecked === true,
     refetchOnMount: "always",
   });
 
@@ -91,6 +97,11 @@ export default function CourseDetailScreen() {
       toast("Impossibile iscriversi", e?.message || "Riprova.");
     }
   };
+
+  // Guest visitor → gated landing (marketing preview, no content leak)
+  if (authChecked === false && id) {
+    return <GatedLanding contentType="course" contentId={id as string} />;
+  }
 
   if (isLoading || !data) {
     return (
@@ -267,7 +278,7 @@ export default function CourseDetailScreen() {
               </Text>
             </Pressable>
             <Pressable
-              onPress={() => {
+              onPress={async () => {
                 if (!withdrawalConsent) {
                   toast(
                     "Consenso richiesto",
@@ -275,10 +286,28 @@ export default function CourseDetailScreen() {
                   );
                   return;
                 }
-                toast(
-                  "Pagamenti in attivazione",
-                  "L'acquisto dei corsi Premium sarà disponibile a breve. Stiamo predisponendo Stripe e PayPal.",
-                );
+                if (!purchaseEmail.trim() || !purchaseEmail.includes("@")) {
+                  toast("Email richiesta", "Inserisci un'email valida per la ricevuta.");
+                  return;
+                }
+                try {
+                  const res = await api<any>("/payments/stripe/checkout/course", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      course_id: id,
+                      coupon_code: couponInfo?.code,
+                      email: purchaseEmail.trim().toLowerCase(),
+                    }),
+                  });
+                  const WebBrowser = await import("expo-web-browser");
+                  if (Platform.OS === "web") {
+                    if (typeof window !== "undefined") window.location.href = res.url;
+                  } else {
+                    await WebBrowser.openBrowserAsync(res.url, { showTitle: true });
+                  }
+                } catch (e: any) {
+                  toast("Errore pagamento", e?.message || "Riprova più tardi");
+                }
               }}
               style={[styles.ctaBtn, styles.ctaPremium, !withdrawalConsent && styles.ctaDisabled]}
             >

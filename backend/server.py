@@ -490,6 +490,14 @@ async def startup():
     except Exception as e:
         logger.warning(f"Subscription scheduler failed to start: {e}")
 
+    # Bootstrap Stripe integration health-check.
+    try:
+        from stripe_service import is_configured as _stripe_ok
+        if _stripe_ok():
+            logger.info("[STRIPE] integration enabled (Emergent proxy)")
+    except Exception as e:
+        logger.warning(f"Stripe bootstrap skipped: {e}")
+
 
 async def _seed_demo_content():
     """Seed initial content from the 3 websites (AI-style summaries)."""
@@ -1166,6 +1174,10 @@ async def cancel_renewal(user: dict = Depends(current_user)):
         raise HTTPException(400, "Nessun abbonamento attivo da disdire")
     if not sub.get("expires_at"):
         raise HTTPException(400, "Data di scadenza non impostata")
+    # Note: since we use one-time Checkout Sessions (not Stripe recurring
+    # Subscriptions), there is nothing to cancel on Stripe's side — the
+    # payment already happened. Our own APScheduler cron will simply stop
+    # sending renewal emails and let the subscription expire.
     new_sub = {**sub, "auto_renew": False, "cancelled_at": now_iso()}
     await db.users.update_one({"id": user["id"]}, {"$set": {"subscription": new_sub}})
     return {"ok": True, "message": "Rinnovo automatico disattivato. L'accesso Premium resta valido fino alla scadenza."}
@@ -2457,6 +2469,335 @@ async def activate_order(order_id: str):
     except Exception as e:
         logger.warning(f"Order receipt email failed: {e}")
     return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# PUBLIC preview endpoints — NO authentication required.
+# These return only the metadata / marketing preview of a content item so that
+# shared links (WhatsApp/Telegram/Facebook/Google) can render a rich landing
+# page WITHOUT exposing the actual content (audio, video, article body, etc.).
+# The user must register/subscribe to access the real content.
+# ---------------------------------------------------------------------------
+def _short_desc(html_or_text: str, max_len: int = 220) -> str:
+    """Strip HTML tags and truncate to a short marketing teaser."""
+    if not html_or_text:
+        return ""
+    import re
+    txt = re.sub(r"<[^>]+>", " ", str(html_or_text))
+    txt = re.sub(r"\s+", " ", txt).strip()
+    return (txt[: max_len - 1] + "…") if len(txt) > max_len else txt
+
+
+@api.get("/public/meditation/{item_id}")
+async def public_meditation_preview(item_id: str, lang: str = "it"):
+    """Public preview for a meditation (or media item). Zero content leak."""
+    doc = await db.media.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Contenuto non trovato")
+    return {
+        "id": doc["id"],
+        "type": "meditation",
+        "title": doc.get("title") or doc.get("title_it") or "",
+        "cover_url": doc.get("cover_url") or doc.get("thumbnail_url") or "",
+        "category": doc.get("category") or doc.get("category_slug") or "",
+        "duration_sec": int(doc.get("duration_sec") or doc.get("duration") or 0),
+        "short_description": _short_desc(
+            doc.get("description") or doc.get("description_it") or doc.get("summary") or ""
+        ),
+        "is_premium": bool(doc.get("is_premium") or doc.get("premium")),
+    }
+
+
+@api.get("/public/course/{item_id}")
+async def public_course_preview(item_id: str):
+    """Public preview for a course. Shows title, cover, price, topic count."""
+    doc = await db.courses.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Corso non trovato")
+    topics_count = await db.course_topics.count_documents({"course_id": item_id})
+    return {
+        "id": doc["id"],
+        "type": "course",
+        "title": doc.get("title") or "",
+        "cover_url": doc.get("cover_url") or "",
+        "short_description": _short_desc(doc.get("description_html") or doc.get("description") or ""),
+        "kind": doc.get("kind") or "base",
+        "is_premium": doc.get("kind") == "premium",
+        "price_eur": int(doc.get("price_eur") or doc.get("price") or 0) if doc.get("kind") == "premium" else 0,
+        "topics_count": topics_count,
+        "author": doc.get("author") or doc.get("teacher") or "",
+        "is_active": bool(doc.get("is_active")),
+    }
+
+
+@api.get("/public/article/{item_id}")
+async def public_article_preview(item_id: str):
+    """Public preview for a library article. Body content is NOT returned."""
+    doc = await db.articles.find_one({"id": item_id})
+    if not doc:
+        raise HTTPException(404, "Articolo non trovato")
+    return {
+        "id": doc["id"],
+        "type": "article",
+        "title": doc.get("title") or "",
+        "cover_url": doc.get("cover_url") or doc.get("image_url") or "",
+        "category": doc.get("category") or doc.get("category_slug") or "",
+        "short_description": _short_desc(
+            doc.get("summary") or doc.get("excerpt") or doc.get("body") or "",
+            max_len=280,
+        ),
+        "is_premium": bool(doc.get("is_premium")),
+    }
+
+
+
+
+# ---------------------------------------------------------------------------
+# Stripe payment endpoints — hosted Checkout flow (compatible with PWA, Expo Go
+# and native builds via expo-web-browser)
+# ---------------------------------------------------------------------------
+class StripeCourseCheckoutIn(BaseModel):
+    course_id: str
+    coupon_code: Optional[str] = None
+    email: Optional[str] = None
+
+
+@api.get("/payments/stripe/config")
+async def stripe_public_config():
+    """Return public Stripe config to the frontend (only publishable key + flag)."""
+    from stripe_service import is_configured, public_key
+    return {"enabled": is_configured(), "publishable_key": public_key()}
+
+
+@api.post("/payments/stripe/checkout/subscription", dependencies=[Depends(current_user)])
+async def stripe_checkout_subscription(order_id: str, user: dict = Depends(current_user)):
+    """Given an existing pending order (created by POST /orders), open a Stripe
+    Checkout Session. Returns {url, session_id}."""
+    from stripe_service import create_subscription_checkout, is_configured
+    if not is_configured():
+        raise HTTPException(503, "Pagamenti temporaneamente non disponibili")
+    order = await db.orders.find_one({"id": order_id, "user_id": user["id"]})
+    if not order:
+        raise HTTPException(404, "Ordine non trovato")
+    if order.get("status") == "active":
+        raise HTTPException(400, "Ordine già attivato")
+    try:
+        res = await create_subscription_checkout(
+            user, order_id=order["id"], amount_eur=float(order.get("amount_eur", 12)),
+        )
+    except Exception as e:
+        logger.error(f"[STRIPE] subscription checkout failed: {e}")
+        raise HTTPException(500, f"Errore Stripe: {e}")
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"stripe_session_id": res["session_id"], "payment_provider": "stripe"}},
+    )
+    return res
+
+
+@api.post("/payments/stripe/checkout/course", dependencies=[Depends(current_user)])
+async def stripe_checkout_course(inp: StripeCourseCheckoutIn, user: dict = Depends(current_user)):
+    """Create a course_order and a one-time Checkout Session for a Premium course."""
+    from stripe_service import create_course_checkout, is_configured
+    if not is_configured():
+        raise HTTPException(503, "Pagamenti temporaneamente non disponibili")
+    course = await db.courses.find_one({"id": inp.course_id, "is_active": True})
+    if not course:
+        raise HTTPException(404, "Corso non disponibile")
+    if course.get("kind") != "premium":
+        raise HTTPException(400, "Questo corso non è a pagamento")
+
+    base_price = float(course.get("price_eur") or course.get("price") or 0)
+    if base_price <= 0:
+        raise HTTPException(400, "Prezzo del corso non impostato dall'amministratore")
+
+    # Optional coupon (server-validated)
+    amount_eur = base_price
+    applied_code: Optional[str] = None
+    if inp.coupon_code:
+        code = inp.coupon_code.strip().upper()
+        c = await db.coupons.find_one({"code": code, "active": True})
+        if not c:
+            raise HTTPException(404, "Codice sconto non valido")
+        if c.get("used_count", 0) >= c.get("max_uses", 10**9):
+            raise HTTPException(410, "Codice sconto esaurito")
+        scope = c.get("scope") or "all"
+        if scope == "course" and c.get("course_id") not in (None, "", inp.course_id):
+            raise HTTPException(400, "Questo codice non è valido per questo corso")
+        amount_eur = max(1.0, round(base_price * (100 - c["percent_off"]) / 100, 2))
+        applied_code = code
+
+    # Persist email if provided
+    if inp.email:
+        e = inp.email.strip().lower()
+        if "@" in e and "." in e.split("@")[-1]:
+            existing = await db.users.find_one({"email": e, "id": {"$ne": user["id"]}})
+            if not existing:
+                await db.users.update_one({"id": user["id"]}, {"$set": {"email": e}})
+                user["email"] = e
+
+    order_no = f"CRS-{int(datetime.now(timezone.utc).timestamp())}"
+    course_order_id = str(uuid.uuid4())
+    await db.course_orders.insert_one({
+        "id": course_order_id,
+        "order_no": order_no,
+        "user_id": user["id"],
+        "course_id": inp.course_id,
+        "course_title": course.get("title", ""),
+        "amount_eur": amount_eur,
+        "original_eur": base_price,
+        "coupon_code": applied_code,
+        "status": "pending",
+        "payment_provider": "stripe",
+        "created_at": now_iso(),
+    })
+    try:
+        res = await create_course_checkout(user, course, amount_eur, course_order_id)
+    except Exception as e:
+        logger.error(f"[STRIPE] course checkout failed: {e}")
+        await db.course_orders.update_one({"id": course_order_id}, {"$set": {"status": "failed", "error": str(e)}})
+        raise HTTPException(500, f"Errore Stripe: {e}")
+    if applied_code:
+        await db.coupons.update_one({"code": applied_code}, {"$inc": {"used_count": 1}})
+    await db.course_orders.update_one(
+        {"id": course_order_id},
+        {"$set": {"stripe_session_id": res["session_id"]}},
+    )
+    return {**res, "course_order_id": course_order_id, "amount_eur": amount_eur, "coupon_code": applied_code}
+
+
+@api.get("/payments/stripe/session/{session_id}", dependencies=[Depends(current_user)])
+async def stripe_session_status(session_id: str, user: dict = Depends(current_user)):
+    """Return the current status of a Checkout Session. If paid, proactively
+    fulfill the entitlement in case the webhook is late."""
+    from stripe_service import get_session_status, is_configured
+    if not is_configured():
+        raise HTTPException(503, "Pagamenti non configurati")
+    try:
+        status = await get_session_status(session_id)
+    except Exception as e:
+        raise HTTPException(404, f"Sessione non trovata: {e}")
+    md = status.get("metadata") or {}
+    if md.get("user_id") not in (user["id"], None):
+        raise HTTPException(403, "Sessione non tua")
+    paid = (status.get("payment_status") == "paid") or (status.get("status") == "complete")
+    if paid:
+        await _stripe_fulfill_metadata(md)
+    return {
+        "session_id": session_id,
+        "status": status.get("status"),
+        "payment_status": status.get("payment_status"),
+        "paid": paid,
+        "kind": md.get("kind"),
+        "order_id": md.get("order_id"),
+        "course_order_id": md.get("course_order_id"),
+    }
+
+
+async def _stripe_fulfill_metadata(md: dict) -> None:
+    """Idempotently apply the effects of a paid Checkout Session on our DB,
+    based on the session metadata alone (no need to hit Stripe again)."""
+    kind = md.get("kind")
+    user_id = md.get("user_id")
+    if not user_id:
+        return
+
+    if kind == "subscription":
+        order_id = md.get("order_id")
+        if not order_id:
+            return
+        order = await db.orders.find_one({"id": order_id})
+        if not order or order.get("status") == "active":
+            return
+        expires = datetime.now(timezone.utc) + timedelta(days=order.get("days") or 365)
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"subscription": {
+                "status": "premium",
+                "plan": order.get("plan", "12m"),
+                "expires_at": expires.isoformat(),
+                "auto_renew": True,
+                "activated_at": now_iso(),
+            }}},
+        )
+        await db.orders.update_one(
+            {"id": order_id},
+            {"$set": {"status": "active", "paid_at": now_iso()}},
+        )
+        # Receipt email (best-effort)
+        try:
+            from emailer import send_email, render_order_receipt
+            u = await db.users.find_one({"id": user_id}, {"_id": 0, "name": 1, "email": 1})
+            recipient = order.get("email") or (u or {}).get("email")
+            if recipient:
+                plan_label = (PLANS.get(order.get("plan", "")) or {}).get("label", order.get("plan", ""))
+                subj, html = render_order_receipt(
+                    (u or {}).get("name") or "",
+                    plan_label,
+                    int(order.get("amount_eur", 0)),
+                    order.get("order_no") or order.get("id", "")[:8],
+                    expires.isoformat(),
+                )
+                await send_email(to=recipient, subject=subj, html=html)
+        except Exception as e:
+            logger.warning(f"[STRIPE] receipt email failed: {e}")
+
+    elif kind == "course":
+        course_order_id = md.get("course_order_id")
+        course_id = md.get("course_id")
+        if not course_order_id or not course_id:
+            return
+        co = await db.course_orders.find_one({"id": course_order_id})
+        if not co or co.get("status") == "active":
+            return
+        await db.course_orders.update_one(
+            {"id": course_order_id},
+            {"$set": {"status": "active", "paid_at": now_iso()}},
+        )
+        existing = await db.course_enrollments.find_one({"course_id": course_id, "user_id": user_id})
+        if not existing:
+            await db.course_enrollments.insert_one({
+                "id": str(uuid.uuid4()),
+                "course_id": course_id,
+                "user_id": user_id,
+                "started_at": now_iso(),
+                "quiz_passed": False,
+                "quiz_attempts": 0,
+                "certificate_id": None,
+                "purchased": True,
+            })
+
+
+@api.post("/payments/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Stripe webhook (idempotent via `stripe_events` collection)."""
+    from stripe_service import handle_webhook
+    raw = await request.body()
+    sig = request.headers.get("stripe-signature")
+    try:
+        event = await handle_webhook(raw, sig)
+    except Exception as e:
+        logger.warning(f"[STRIPE] Invalid webhook: {e}")
+        raise HTTPException(400, "Invalid signature")
+
+    event_id = event.get("event_id")
+    if event_id:
+        try:
+            inserted = await db.stripe_events.update_one(
+                {"id": event_id},
+                {"$setOnInsert": {"id": event_id, "type": event.get("event_type"), "received_at": now_iso()}},
+                upsert=True,
+            )
+            if not inserted.upserted_id:
+                return {"received": True, "duplicate": True}
+        except Exception:
+            pass
+
+    if event.get("payment_status") == "paid":
+        await _stripe_fulfill_metadata(event.get("metadata") or {})
+    return {"received": True}
+
+
 
 
 @api.get("/admin/orders", dependencies=[Depends(require_admin)])
