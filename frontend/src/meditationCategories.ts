@@ -145,7 +145,7 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
 ];
 
 export const MEDITATION_HERO_IMAGE = abs(
-  "/api/files/meditation-covers/hero-2d72ad45.jpg"
+  "/api/files/meditation-covers/hero-c4cc4b71.webp"
 );
 
 export const MEDITATION_HERO_TITLE = "Il valore e l'importanza della meditazione";
