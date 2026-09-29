@@ -60,6 +60,33 @@ async def root():
     return {"app": "Conoscenza Aperta", "version": "1.0"}
 
 
+@api.get("/health")
+async def health():
+    """Kubernetes/Emergent health probe. Verifies the app is up and Mongo
+    responds to a ping."""
+    try:
+        await db.command("ping")
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "app": "Libertà in Conoscenza",
+        "db": "ok" if db_ok else "down",
+    }
+
+
+# Root-level /health so Emergent's non-/api health probe finds it too.
+@app.get("/health")
+async def health_root():
+    try:
+        await db.command("ping")
+        db_ok = True
+    except Exception:
+        db_ok = False
+    return {"status": "ok" if db_ok else "degraded", "db": "ok" if db_ok else "down"}
+
+
 @api.get("/categories")
 async def get_categories():
     return {"categories": CATEGORIES}
