@@ -8,7 +8,7 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
 - **12 categories** + Video + 13 seed articles + 3 seed audio/video + 15 videos imported from @SUMMAAUREA.
 - **Home**: hero article + latest articles + **global search bar** across articles & media.
 - **Library**: 2-col grid + horizontal category chips.
-- **Media**: meditations & videos with kind filter + premium gating.
+- **Media**: meditations & videos with kind filter + premium gating. Meditation categories (10, alphabetical): Amore e Gioia, Armonizzazione e Radicamento, Calma e Serenità, Concentrazione e Attenzione, Natura e Armonia, Perdono e Valore di Sè, Presenza e Ascolto Interiore, Ricarica energetica, Rilassamento e Sonno, Risveglio Dell'Anima.
 - **Article detail**: editorial reading, Telegram/WhatsApp share, heart favorite, **comments** section.
 - **Media detail**: heart favorite, **in-app audio player** (expo-audio) for meditation MP3 with pause/resume/±15s + auto-complete tracking; external Linking for YouTube videos; **PDF completion certificate** (expo-print).
 - **Favorites**: personal list at Profilo → Preferiti.

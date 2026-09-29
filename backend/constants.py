@@ -23,16 +23,14 @@ CATEGORIES = [
 MEDITATION_CATEGORIES = [
     "Amore e Gioia",
     "Armonizzazione e Radicamento",
-    "Autostima",
     "Calma e Serenità",
     "Concentrazione e Attenzione",
-    "Natura",
-    "Perdono",
+    "Natura e Armonia",
+    "Perdono e Valore di Sè",
     "Presenza e Ascolto Interiore",
     "Ricarica energetica",
-    "Rilassamento",
+    "Rilassamento e Sonno",
     "Risveglio Dell'Anima",
-    "Sonno",
 ]
 
 VIDEO_CATEGORIES = [

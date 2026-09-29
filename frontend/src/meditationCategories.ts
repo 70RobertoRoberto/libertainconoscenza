@@ -45,20 +45,6 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
     ],
   },
   {
-    name: "Autostima",
-    slug: "autostima",
-    image: abs("/api/files/meditation-covers/autostima-c9337e39.jpg"),
-    description:
-      "L'autostima non è pensare di essere perfetti. È sapere di valere, anche quando si sbaglia. È riconoscere il proprio posto nel mondo, la propria voce, il proprio corpo, la propria storia. Viviamo in un tempo che ci chiede continuamente di essere diversi da come siamo: più produttivi, più belli, più forti, più sorridenti.\n\nL'autostima è la pratica di tornare a sé stessi, di guardarsi con occhi buoni, di darsi il permesso di esistere così come si è. Non è arroganza, non è egoismo: è la base per stare con gli altri senza perdersi. Le meditazioni di questa categoria accompagnano in questo ritorno: alla casa dentro di te, alla voce gentile, al corpo amico, alla fiducia che cresce. Il valore non si conquista: si riconosce.",
-    benefits: [
-      "Riconoscere il proprio valore",
-      "Sciogliere la voce critica interiore",
-      "Riconciliarsi con il proprio corpo",
-      "Darsi il permesso di essere sé stessi",
-      "Ritrovare fiducia nelle proprie scelte",
-    ],
-  },
-  {
     name: "Calma e Serenità",
     slug: "calma-e-serenita",
     image: abs("/api/files/meditation-covers/calma-e-serenita-fc57933a.jpg"),
@@ -87,31 +73,31 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
     ],
   },
   {
-    name: "Natura",
-    slug: "natura",
+    name: "Natura e Armonia",
+    slug: "natura-e-armonia",
     image: abs("/api/files/meditation-covers/natura-8e171b59.jpg"),
     description:
-      "La natura non è un luogo dove andare, ma un luogo da ricordare. È la matrice da cui veniamo, il ritmo che ci ha generato, il respiro che ci precede. Quando ci fermiamo sotto un albero, quando ascoltiamo l'acqua di un fiume, quando sentiamo il vento fra le foglie, qualcosa dentro di noi si riallinea. Non è nostalgia: è casa che ci chiama.\n\nLe meditazioni di questa categoria ti riportano a quel legame primordiale — con la terra sotto i piedi, con il cielo sopra il capo, con il verde che respira insieme a te. Non serve andare lontano: basta chiudere gli occhi e lasciare che la natura ti attraversi. Un bosco dentro il petto, un fiume nel respiro, un tramonto negli occhi chiusi. Sei natura tu stesso, non ospite di essa. E quando lo ricordi, la pace non è più qualcosa da cercare.",
+      "La natura non è un luogo dove andare, ma un luogo da ricordare. È la matrice da cui veniamo, il ritmo che ci ha generato, il respiro che ci precede. E dove c'è natura, c'è armonia: quella intelligenza silenziosa che tiene insieme le cose senza forzarle, che fa fiorire l'albero al tempo giusto, che accorda il canto degli uccelli col sorgere del sole. L'armonia non è perfezione — è relazione: tra dentro e fuori, tra sé e il vivente, tra il proprio respiro e quello del mondo.\n\nQuando ci fermiamo sotto un albero, quando ascoltiamo l'acqua di un fiume, quando sentiamo il vento fra le foglie, qualcosa dentro di noi si riallinea. Non è nostalgia: è casa che ci chiama. Le meditazioni di questa categoria ti riportano a quel legame primordiale — con la terra sotto i piedi, con il cielo sopra il capo, con il verde che respira insieme a te — e ti ricordano che l'armonia che cerchi fuori è la stessa che vive dentro. Sei natura tu stesso, non ospite di essa. E quando lo ricordi, la pace non è più qualcosa da cercare: è qualcosa che ti attraversa.",
     benefits: [
       "Ristabilire il legame con gli elementi (terra, acqua, aria, fuoco)",
       "Sentire il proprio ritmo naturale, oltre la fretta della città",
       "Ricaricarsi con la vitalità degli spazi verdi",
-      "Sciogliere lo stress in un ambiente immaginato",
-      "Ricordare di appartenere al vivente",
+      "Sintonizzarsi con l'armonia del vivente",
+      "Ricordare di appartenere alla natura, non di dominarla",
     ],
   },
   {
-    name: "Perdono",
-    slug: "perdono",
+    name: "Perdono e Valore di Sè",
+    slug: "perdono-e-valore-di-se",
     image: abs("/api/files/meditation-covers/perdono-01bff283.jpg"),
     description:
-      "Il perdono è una delle pratiche più difficili e più liberatorie. Non è dimenticare, non è giustificare, non è fingere che non sia successo niente. È lasciare andare il peso che porti. È scegliere di non farti più male con qualcosa che è già accaduto. Il perdono non è sempre possibile, e non è sempre il momento. Ma la pace sì: la pace è sempre una scelta.\n\nLe meditazioni di questa categoria ti accompagnano con dolcezza, senza forzare niente. Aprono una porta. Non ti spingono dentro. Sei tu che decidi quando e come entrare. Il perdono non è un atto istantaneo: è una direzione. È un aprire la porta e lasciarla aperta. Anche quando non riesci a perdonare, puoi sempre scegliere di non portare più il peso.",
+      "Il perdono e il valore di sé sono due volti dello stesso movimento: l'atto di smettere di farsi male con ciò che è stato, per riconoscersi come si è. Il perdono non è dimenticare, non è giustificare, non è fingere che non sia successo niente — è lasciare andare il peso che porti, è scegliere di non farti più male con qualcosa che è già accaduto. Ma non si può perdonare davvero se non si torna prima a casa, dentro di sé, in quel luogo dove il proprio valore non si conquista: si riconosce.\n\nL'autostima non è pensare di essere perfetti: è sapere di valere anche quando si sbaglia, riconoscere la propria voce, il proprio corpo, la propria storia. Viviamo in un tempo che ci chiede continuamente di essere diversi da come siamo, e la voce critica interiore si nutre proprio del rancore verso sé stessi. Le meditazioni di questa categoria ti accompagnano con dolcezza in entrambi i movimenti — aprire una porta al perdono degli altri e di te stesso, e nello stesso tempo ricordare che meriti di esistere così come sei. Non c'è pace vera senza valore riconosciuto. E non c'è valore vero senza il coraggio di perdonarsi.",
     benefits: [
       "Riconoscere e alleggerire il peso del rancore",
-      "Guardare l'altro senza fuggire",
-      "Perdonare sé stessi",
-      "Scegliere la pace, anche quando il perdono non arriva",
-      "Liberare il cuore da ciò che pesa",
+      "Perdonare sé stessi e gli altri senza forzare",
+      "Sciogliere la voce critica interiore",
+      "Riconoscere il proprio valore, anche quando si sbaglia",
+      "Scegliere la pace e ritrovare fiducia in sé",
     ],
   },
   {
@@ -143,17 +129,17 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
     ],
   },
   {
-    name: "Rilassamento",
-    slug: "rilassamento",
+    name: "Rilassamento e Sonno",
+    slug: "rilassamento-e-sonno",
     image: abs("/api/files/meditation-covers/rilassamento-420c3d89.jpg"),
     description:
-      "Il rilassamento è la porta d'ingresso di ogni pratica. Quando il corpo si distende, anche la mente si quieta, anche il cuore si apre. Rilassarsi non è pigrizia, non è perdere tempo: è permettere al corpo di fare ciò che sa fare, cioè sciogliere la tensione che accumula ogni giorno.\n\nViviamo in uno stato di allerta continua, anche quando non ce n'è bisogno. Il rilassamento è la risposta a questo stato: è il ritorno a un ritmo naturale, più lento, più morbido, più umano. Le meditazioni di questa categoria ti accompagnano a sciogliere il corpo, a lasciar andare la tensione, a sentire il peso che si posa. Non serve fare niente: serve solo permettere. Permettere al corpo di rilassarsi. Permettere alla mente di quietarsi. Permettere a te stesso di stare.",
+      "Il rilassamento è la porta d'ingresso di ogni pratica, e il sonno il suo compimento più naturale. Quando il corpo si distende, anche la mente si quieta, anche il cuore si apre; e quando il rilassamento è profondo, il riposo arriva da sé, senza che tu debba cercarlo. Rilassarsi non è pigrizia, non è perdere tempo: è permettere al corpo di fare ciò che sa fare, cioè sciogliere la tensione che accumula ogni giorno e prepararsi al ristoro notturno.\n\nViviamo in uno stato di allerta continua, anche quando non ce n'è bisogno, e per molte persone dormire è diventato difficile: la mente non si spegne, il corpo resta teso, il riposo non arriva. Le meditazioni di questa categoria ti accompagnano con dolcezza in un doppio movimento — sciogliere le tensioni della giornata e scivolare verso il sonno senza sforzo. Una voce lenta, immagini calme, un respiro che si allunga. Non serve fare niente: serve solo permettere. Il sonno non va cercato: va accolto. E queste pratiche preparano il terreno perché possa arrivare, semplicemente, quando smetti di trattenere.",
     benefits: [
-      "Sciogliere la tensione fisica",
-      "Rilassare il corpo dopo una giornata pesante",
-      "Prepararsi al riposo",
-      "Ritrovare un ritmo naturale",
-      "Lasciar andare lo stato di allerta",
+      "Sciogliere la tensione fisica accumulata",
+      "Rilassare corpo e mente dopo una giornata pesante",
+      "Prepararsi al riposo e scivolare nel sonno con dolcezza",
+      "Liberare la mente dai pensieri prima di dormire",
+      "Ritrovare un rapporto sereno con il riposo notturno",
     ],
   },
   {
@@ -168,20 +154,6 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
       "Aprirsi a dimensioni più ampie della coscienza",
       "Distinguere l'ego dalla voce dell'anima",
       "Vivere con maggiore sacralità la quotidianità",
-    ],
-  },
-  {
-    name: "Sonno",
-    slug: "sonno",
-    image: abs("/api/files/meditation-covers/sonno-2dd3138d.jpg"),
-    description:
-      "Il sonno non è tempo perso. È il momento in cui il corpo si ripara, la mente si riordina, le emozioni si depositano. Eppure, per molte persone, dormire è diventato difficile. La mente non si spegne, il corpo resta teso, il riposo non arriva.\n\nLe meditazioni di questa categoria sono pensate per accompagnarti verso il sonno con dolcezza. Non ti chiedono di fare niente: ti invitano solo a lasciarti andare. Una voce lenta, immagini calme, un respiro che si allunga. Il sonno non va cercato: va accolto. E queste meditazioni preparano il terreno perché possa arrivare. Non serve sforzarsi di dormire. Serve solo smettere di trattenere. Il sonno arriva quando smetti di aspettarlo. E quando arriva, ti prende.",
-    benefits: [
-      "Rilassare il corpo prima di dormire",
-      "Liberare la mente dai pensieri",
-      "Entrare nel sonno con sicurezza",
-      "Ritrovare un rapporto sereno con il riposo",
-      "Lasciarsi andare senza forzare",
     ],
   },
 ];
