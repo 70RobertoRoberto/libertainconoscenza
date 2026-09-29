@@ -263,4 +263,44 @@ def build_admin_router(db, current_user, require_admin) -> APIRouter:
         result = await run_subscription_lifecycle(db)
         return {"ok": True, "result": result}
 
+    @api.post("/admin/subscriptions/purge-expired", dependencies=[Depends(require_admin)])
+    async def admin_purge_expired_users(dry_run: bool = True):
+        """Manually purge progress data for users whose grace window ended.
+
+        DESTRUCTIVE — the daily cron never runs this automatically. Only an
+        admin can invoke it, and by default we run in `dry_run=True` mode
+        (returns the list of user IDs that would be purged without deleting
+        anything). Pass `?dry_run=false` explicitly to actually delete.
+        """
+        from subscription_scheduler import _purge_user_progress, _parse_iso, _now_utc
+        now = _now_utc()
+        candidates = []
+        async for u in db.users.find({"subscription.purge_at": {"$ne": None}}):
+            purge_at = _parse_iso((u.get("subscription") or {}).get("purge_at"))
+            if purge_at and purge_at <= now:
+                candidates.append({
+                    "user_id": u["id"],
+                    "phone": u.get("phone"),
+                    "email": u.get("email"),
+                    "purge_at": (u.get("subscription") or {}).get("purge_at"),
+                })
+        if dry_run:
+            return {
+                "ok": True,
+                "dry_run": True,
+                "would_purge": len(candidates),
+                "candidates": candidates[:50],
+                "note": "Chiama con ?dry_run=false per eliminare davvero.",
+            }
+        purged = 0
+        errors = 0
+        for c in candidates:
+            try:
+                await _purge_user_progress(db, c["user_id"])
+                purged += 1
+            except Exception as e:
+                logger.warning(f"Purge failed for {c['user_id']}: {e}")
+                errors += 1
+        return {"ok": True, "dry_run": False, "purged": purged, "errors": errors}
+
     return api

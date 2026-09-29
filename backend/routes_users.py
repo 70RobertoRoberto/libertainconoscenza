@@ -263,8 +263,15 @@ def build_users_router(db, current_user, require_admin) -> APIRouter:
                     "expires_at": expires,
                     "used_at": None,
                 })
-                base_url = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("APP_PUBLIC_URL") or "https://libertaconoscenza.emergent.host"
-                verify_url = f"{base_url.rstrip('/')}/verify-email?token={token}"
+                base_url = (
+                    os.environ.get("EXPO_PUBLIC_BACKEND_URL")
+                    or os.environ.get("APP_PUBLIC_URL")
+                    or ""
+                ).rstrip("/")
+                if not base_url:
+                    logger.warning("APP URL non configurato: email di verifica non inviata")
+                    return {"ok": True, "email": e, "email_verified": False if changed else bool(user.get("email_verified"))}
+                verify_url = f"{base_url}/verify-email?token={token}"
                 from emailer import send_email, render_email_verification
                 subj, html = render_email_verification(user.get("name") or "", verify_url)
                 await send_email(to=e, subject=subj, html=html)
@@ -291,8 +298,15 @@ def build_users_router(db, current_user, require_admin) -> APIRouter:
                 "expires_at": expires,
                 "used_at": None,
             })
-            base_url = os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("APP_PUBLIC_URL") or "https://libertaconoscenza.emergent.host"
-            verify_url = f"{base_url.rstrip('/')}/verify-email?token={token}"
+            base_url = (
+                os.environ.get("EXPO_PUBLIC_BACKEND_URL")
+                or os.environ.get("APP_PUBLIC_URL")
+                or ""
+            ).rstrip("/")
+            if not base_url:
+                logger.warning("EXPO_PUBLIC_BACKEND_URL/APP_PUBLIC_URL non impostati: email di verifica non inviata")
+                return {"ok": True, "email": e, "email_verified": False if changed else bool(user.get("email_verified"))}
+            verify_url = f"{base_url}/verify-email?token={token}"
             from emailer import send_email, render_email_verification
             subj, html = render_email_verification(user.get("name") or "", verify_url)
             await send_email(to=e, subject=subj, html=html)

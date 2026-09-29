@@ -106,19 +106,12 @@ async def run_subscription_lifecycle(db) -> dict:
             summary["errors"] += 1
             logger.error(f"Subscription job failed for user {u.get('id')}: {e}")
 
-    # Second pass: data purge for users past 6-month grace window
-    purge_cursor = db.users.find({
-        "subscription.purge_at": {"$ne": None},
-    })
-    async for u in purge_cursor:
-        purge_at = _parse_iso((u.get("subscription") or {}).get("purge_at"))
-        if purge_at and purge_at <= now:
-            try:
-                await _purge_user_progress(db, u["id"])
-                summary["purged"] += 1
-            except Exception as e:
-                summary["errors"] += 1
-                logger.error(f"Purge failed for user {u.get('id')}: {e}")
+    # NOTE: Data purge for expired users is NOT part of the automatic
+    # scheduler anymore. Any hard delete of user progress must be triggered
+    # explicitly by an admin via the dedicated admin endpoint (see
+    # /api/admin/subscriptions/purge-expired), which itself is opt-in per
+    # request. This keeps the daily cron 100% non-destructive.
+    summary["purge_skipped_manual_only"] = True
 
     logger.info(f"[SUBSCRIPTION-CRON] {summary}")
     return summary
