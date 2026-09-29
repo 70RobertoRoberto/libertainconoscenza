@@ -58,6 +58,28 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
 - Emergent Object Storage for file uploads (verified working)
 - Emergent Push (SuprSend) — delivery after native build + Firebase google-services.json for Android
 - YouTube RSS (15 latest); Data API v3 optional via YOUTUBE_API_KEY
+- **Stripe** (Emergent proxy, test key) — subscription 12€/yr + premium course purchases; end-to-end tested 29/09/2026 (real payment `4242 4242 4242 4242` → order `ORD-1790648922` activated, receipt email delivered). Redirect URL now uses `APP_PUBLIC_URL` (bug fixed: previously fell back to localhost).
+- **Resend** (Emergent managed) — order receipts + verification emails + subscription reminders (cron)
+
+## Backend architecture
+Refactored from 3495-line monolith `server.py` into **10 modules** (29/09/2026):
+- `server.py` (266 lines): app init, startup/shutdown, wire routers
+- `deps.py`: shared Mongo client, JWT, auth deps, password hashing, user shaping
+- `constants.py`: CATEGORIES, MEDITATION_CATEGORIES, VIDEO_CATEGORIES, PLANS, ALLOWED_MIME
+- `models.py`: all Pydantic request/response models
+- `storage.py`: Emergent Object Storage init/put/get
+- `push.py`: SuprSend push wrapper
+- `serializers.py`: article/media/playlist serializers + OG HTML template
+- `routes_auth.py` (9), `routes_users.py` (22), `routes_admin.py` (13), `routes_articles.py` (7), `routes_media.py` (23), `routes_payments.py` (12), `routes_share.py` (6)
+- Plus existing `routes_courses.py`, `routes_support.py`
+- Total: **135 endpoints** across 10 domains, factory pattern with shared deps
+
+## Meditation categories (12)
+Amore e Gioia, Armonizzazione e Radicamento, Autostima, Calma e Serenità, Concentrazione e Attenzione, Natura, Perdono, Presenza e Ascolto Interiore, Ricarica energetica, Rilassamento, Risveglio Dell'Anima, Sonno.
+All with hero image on Object Storage + poetic description + "A cosa serve" bullets.
+
+## Video categories (6, alphabetical)
+Fisica Quantistica, Psicologia e Neuroscienze, Coscienza e Spiritualità, Medicina Complementare, Somatognostica (image: SSC — cardiocentric field), Discipline Naturali e Orientali. (Interviste rimossa 29/09/2026).
 
 ## Content
 - Articles: 62 total (as of latest seed)
