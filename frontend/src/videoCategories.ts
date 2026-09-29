@@ -9,6 +9,10 @@ export type VideoCategory = {
   benefits: string[];  // "Cosa troverai" bullets
 };
 
+// Backend host (Expo Router runs client-side, so build absolute urls here).
+const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL || "";
+const abs = (p: string) => (p.startsWith("http") ? p : `${BACKEND}${p}`);
+
 export const VIDEO_CATEGORIES: VideoCategory[] = [
   {
     name: "Fisica Quantistica",
@@ -69,8 +73,7 @@ export const VIDEO_CATEGORIES: VideoCategory[] = [
   {
     name: "Somatognostica",
     slug: "somatognostica",
-    image:
-      "https://images.unsplash.com/photo-1552196563-55cd4e45efb3?w=1200&auto=format&fit=crop&q=70",
+    image: abs("/api/files/video-covers/somatognostica-ssc-312dbe0b.jpg"),
     description:
       "La Somatognostica Scalare Cardiocentrica è la disciplina biofisica sviluppata dal Dott. Roberto Fabbroni, che unifica fisica quantistica, biologia, psicologia e spiritualità nel riequilibrio energetico-informazionale della persona. In questa sezione trovi video dedicati ai fondamenti della disciplina, alla TB Scalare, al Metodo Summa Aurea, agli aspetti pratici del riequilibrio del campo cardiaco.\n\nContenuti didattici, dimostrativi ed esperienziali per chi desidera conoscere in profondità questo approccio.",
     benefits: [
