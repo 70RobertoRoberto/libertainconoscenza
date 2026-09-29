@@ -49,11 +49,35 @@ def public_key() -> str:
 
 
 def _public_app_url() -> str:
-    return (
-        os.environ.get("PUBLIC_APP_URL")
-        or os.environ.get("preview_endpoint")
-        or "http://localhost:3000"
-    ).rstrip("/")
+    """Resolve the public origin used to build Stripe return URLs.
+
+    Priority (first non-empty wins):
+      1. STRIPE_APP_URL           — explicit Stripe-only override
+      2. APP_PUBLIC_URL           — canonical env var for the public app URL
+                                    (matches backend/.env naming)
+      3. PUBLIC_APP_URL           — legacy alias, still supported
+      4. EXPO_PUBLIC_BACKEND_URL  — same origin as the frontend proxy
+      5. preview_endpoint         — Emergent runtime injected var
+      6. http://localhost:3000    — last-resort fallback (WILL BREAK the
+                                    Stripe redirect on real browsers — a
+                                    WARNING is logged when this branch is hit)
+    """
+    for key in (
+        "STRIPE_APP_URL",
+        "APP_PUBLIC_URL",
+        "PUBLIC_APP_URL",
+        "EXPO_PUBLIC_BACKEND_URL",
+        "preview_endpoint",
+    ):
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            return val.rstrip("/")
+    logger.warning(
+        "[STRIPE] Public app URL not configured — falling back to localhost. "
+        "Set APP_PUBLIC_URL in backend/.env or Stripe will redirect to a "
+        "non-reachable localhost URL."
+    )
+    return "http://localhost:3000"
 
 
 def _success_url() -> str:
