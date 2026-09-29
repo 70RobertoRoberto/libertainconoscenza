@@ -3,6 +3,7 @@
     "name": "Libertà in Conoscenza",
     "slug": "conoscenza-aperta",
     "version": "1.0.0",
+    "description": "Piattaforma di formazione digitale sul ben-essere olistico: meditazioni guidate, corsi online, biblioteca di articoli su biofisica quantistica, medicina integrata, discipline naturali e crescita personale.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "conoscenzaaperta",
@@ -29,7 +30,15 @@
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Libertà in Conoscenza",
+      "shortName": "Libertà",
+      "description": "Piattaforma di formazione digitale sul ben-essere olistico: meditazioni, corsi, biblioteca.",
+      "themeColor": "#D4AF37",
+      "backgroundColor": "#0A0F0D",
+      "display": "standalone",
+      "lang": "it",
+      "orientation": "portrait"
     },
     "plugins": [
       "expo-router",
