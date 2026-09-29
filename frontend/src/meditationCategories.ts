@@ -17,6 +17,20 @@ const abs = (p: string) => (p.startsWith("http") ? p : `${BACKEND}${p}`);
 
 export const MEDITATION_CATEGORIES: MeditationCategory[] = [
   {
+    name: "Amore e Gioia",
+    slug: "amore-e-gioia",
+    image: abs("/api/files/meditation-covers/amore-e-gioia-20c47484.jpg"),
+    description:
+      "L'amore non è un sentimento che si conquista, la gioia non è una ricompensa che si merita. Sono la sostanza stessa di ciò che sei quando smetti di difenderti, quando lasci cadere le maschere, quando torni al respiro. Viviamo cercando amore fuori, e nel farlo dimentichiamo la sorgente che pulsa dentro il petto — quella luce calda che chiede solo di essere riconosciuta.\n\nLa gioia non nasce dagli eventi: nasce dall'apertura del cuore che sa dire sì alla vita così com'è. Le meditazioni di questa categoria ti riportano al centro cardiaco, a quel luogo dove l'amore per sé, per gli altri e per il mondo sono un solo movimento. Non c'è nulla da aggiungere, nulla da diventare. Basta ricordare. E quando ricordi, la gioia fiorisce da sola, come un petalo che si apre al sole.",
+    benefits: [
+      "Riaprire il cuore dopo ferite e chiusure",
+      "Coltivare gratitudine e leggerezza interiore",
+      "Riconnettersi alla gioia semplice del presente",
+      "Amare sé stessi senza condizioni",
+      "Irradiare calore e benevolenza agli altri",
+    ],
+  },
+  {
     name: "Armonizzazione e Radicamento",
     slug: "armonizzazione-e-radicamento",
     image: abs("/api/files/meditation-covers/armonizzazione-e-radicamento-9a6d8b94.jpg"),
@@ -73,6 +87,20 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
     ],
   },
   {
+    name: "Natura",
+    slug: "natura",
+    image: abs("/api/files/meditation-covers/natura-8e171b59.jpg"),
+    description:
+      "La natura non è un luogo dove andare, ma un luogo da ricordare. È la matrice da cui veniamo, il ritmo che ci ha generato, il respiro che ci precede. Quando ci fermiamo sotto un albero, quando ascoltiamo l'acqua di un fiume, quando sentiamo il vento fra le foglie, qualcosa dentro di noi si riallinea. Non è nostalgia: è casa che ci chiama.\n\nLe meditazioni di questa categoria ti riportano a quel legame primordiale — con la terra sotto i piedi, con il cielo sopra il capo, con il verde che respira insieme a te. Non serve andare lontano: basta chiudere gli occhi e lasciare che la natura ti attraversi. Un bosco dentro il petto, un fiume nel respiro, un tramonto negli occhi chiusi. Sei natura tu stesso, non ospite di essa. E quando lo ricordi, la pace non è più qualcosa da cercare.",
+    benefits: [
+      "Ristabilire il legame con gli elementi (terra, acqua, aria, fuoco)",
+      "Sentire il proprio ritmo naturale, oltre la fretta della città",
+      "Ricaricarsi con la vitalità degli spazi verdi",
+      "Sciogliere lo stress in un ambiente immaginato",
+      "Ricordare di appartenere al vivente",
+    ],
+  },
+  {
     name: "Perdono",
     slug: "perdono",
     image: abs("/api/files/meditation-covers/perdono-01bff283.jpg"),
@@ -126,6 +154,20 @@ export const MEDITATION_CATEGORIES: MeditationCategory[] = [
       "Prepararsi al riposo",
       "Ritrovare un ritmo naturale",
       "Lasciar andare lo stato di allerta",
+    ],
+  },
+  {
+    name: "Risveglio Dell'Anima",
+    slug: "risveglio-dell-anima",
+    image: abs("/api/files/meditation-covers/risveglio-dell-anima-cae2da57.jpg"),
+    description:
+      "Il risveglio dell'anima non è un evento straordinario riservato a pochi: è un ritorno silenzioso a ciò che si è sempre stati. C'è un momento, nella vita di ogni essere, in cui le vecchie certezze non bastano più, in cui una voce sottile inizia a chiamare da dentro. Non è un pensiero: è un sentire. Un ricordo che affiora, come se qualcosa di antichissimo si stesse ridestando.\n\nLe meditazioni di questa categoria accompagnano questo passaggio con rispetto e sacralità. Non offrono risposte pronte, ma aprono spazi: spazi in cui ascoltare la propria luce, riconoscere la propria missione, sentire di essere più della propria storia. L'anima non chiede di essere costruita: chiede solo di essere riconosciuta. E quando la incontri, tutto il resto — corpo, mente, relazioni, scelte — si riordina attorno a lei. Il risveglio non è la fine del cammino: è l'inizio del vero cammino.",
+    benefits: [
+      "Riconnettersi con la propria essenza spirituale",
+      "Sentire un senso di direzione e di missione",
+      "Aprirsi a dimensioni più ampie della coscienza",
+      "Distinguere l'ego dalla voce dell'anima",
+      "Vivere con maggiore sacralità la quotidianità",
     ],
   },
   {

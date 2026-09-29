@@ -94,20 +94,6 @@ export const VIDEO_CATEGORIES: VideoCategory[] = [
       "Strumenti quotidiani per il benessere del corpo",
     ],
   },
-  {
-    name: "Interviste",
-    slug: "interviste",
-    image:
-      "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=1200&auto=format&fit=crop&q=70",
-    description:
-      "Voci, storie, esperienze. In questa sezione trovi interviste a ricercatori, medici, terapeuti, insegnanti spirituali, autori e testimoni che condividono il proprio percorso, la propria disciplina e la propria visione.\n\nUn archivio di dialoghi vivi, per approfondire i temi trattati nell'app da prospettive multiple e sfaccettate.",
-    benefits: [
-      "Conoscenza diretta dei protagonisti dei temi trattati",
-      "Storie personali e percorsi di ricerca",
-      "Prospettive multiple sui grandi temi del benessere",
-      "Ispirazione e strumenti concreti",
-    ],
-  },
 ];
 
 export const VIDEO_CATEGORY_NAMES = VIDEO_CATEGORIES.map((c) => c.name);

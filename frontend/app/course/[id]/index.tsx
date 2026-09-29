@@ -10,6 +10,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api, auth } from "@/src/api";
 import { RichViewer } from "@/src/RichEditor";
 import GatedLanding from "@/src/GatedLanding";
+import ShareButton from "@/src/ShareButton";
 
 type CourseDetail = {
   course: {
@@ -138,6 +139,14 @@ export default function CourseDetailScreen() {
         >
           <Text style={styles.backTxt}>‹</Text>
         </Pressable>
+        <View style={{ position: "absolute", right: 12, top: insets.top + 8 }}>
+          <ShareButton
+            contentType="course"
+            contentId={id as string}
+            title={course.title}
+            size="sm"
+          />
+        </View>
         <View style={styles.heroText}>
           <Text style={styles.heroTitle}>{isPremium ? "👑  " : ""}{course.title}</Text>
           {course.area_name ? <Text style={styles.heroArea}>{course.area_name}</Text> : null}

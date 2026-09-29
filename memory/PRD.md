@@ -47,6 +47,11 @@ Community mobile app (IT/EN) about personal & spiritual growth, quantum biophysi
   - Card CTA "Registrati gratis" + "Ho già un account · Accedi"
   - Zero content leak: audio/video/body articolo/capitoli non vengono mai serviti a utenti non autenticati.
   - Le pagine `/media/[id]`, `/course/[id]`, `/article/[id]` rilevano lo stato guest via `auth.hasToken()` e mostrano `GatedLanding` invece di chiamare l'API protetta.
+- **Share button + Open Graph rich previews**:
+  - Nuovo endpoint backend `GET /api/share/{meditation|course|article}/{id}` che serve HTML con meta tag `og:*` + `twitter:*` + Schema.org JSON-LD. Crawler-friendly (WhatsApp/Telegram/Facebook/Slack/iMessage) leggono i meta tag prima del redirect JS. Human visitor viene ridiretto alla pagina reale dell'app dopo ~150ms.
+  - Nuovo componente frontend `src/ShareButton.tsx`. Su iOS/Android usa `Share.share()` nativo; su web usa `navigator.share` se disponibile, altrimenti apre un modal con WhatsApp, Telegram, Facebook, X/Twitter, Email + Copia link (via `expo-clipboard`).
+  - Pulsante ↗ integrato nell'header di `/media/[id]`, `/course/[id]`, `/article/[id]` (accanto al preferito).
+  - URL condivisi sono `/api/share/{type}/{id}` così i social ricevono il preview e i click reindirizzano alla vera app.
 
 ## Integrations
 - Emergent LLM key (GPT-4o-mini) for article AI summarization

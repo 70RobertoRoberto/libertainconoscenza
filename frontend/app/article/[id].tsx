@@ -22,6 +22,7 @@ import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
 import Markdown from "react-native-markdown-display";
 import GatedLanding from "@/src/GatedLanding";
+import ShareButton from "@/src/ShareButton";
 
 export default function ArticleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -134,6 +135,14 @@ export default function ArticleDetail() {
               {fav ? "♥" : "♡"}
             </Text>
           </Pressable>
+          <View style={{ position: "absolute", right: 64, top: insets.top + spacing.md }}>
+            <ShareButton
+              contentType="article"
+              contentId={id as string}
+              title={data.title}
+              size="sm"
+            />
+          </View>
         </View>
 
         <View style={{ paddingHorizontal: spacing.xl, marginTop: -spacing.xl }}>

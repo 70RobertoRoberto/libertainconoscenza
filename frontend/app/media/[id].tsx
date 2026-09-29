@@ -20,6 +20,7 @@ import { AudioPlayer } from "@/src/AudioPlayer";
 import { useLang, catLabel } from "@/src/i18n";
 import AddToPlaylistModal from "@/src/AddToPlaylistModal";
 import GatedLanding from "@/src/GatedLanding";
+import ShareButton from "@/src/ShareButton";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -129,6 +130,14 @@ export default function MediaDetail() {
               {fav ? "♥" : "♡"}
             </Text>
           </Pressable>
+          <View style={{ position: "absolute", right: 64, top: insets.top + spacing.md }}>
+            <ShareButton
+              contentType="meditation"
+              contentId={id as string}
+              title={data.title}
+              size="sm"
+            />
+          </View>
         </View>
         <View style={{ padding: spacing.xl }}>
           <Text style={styles.kind}>{data.kind === "meditation" ? t("meditations").toUpperCase() : t("videos").toUpperCase()}</Text>
