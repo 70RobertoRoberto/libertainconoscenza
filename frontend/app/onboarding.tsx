@@ -59,31 +59,24 @@ const SLIDES: Slide[] = [
     title: "Tutto ciò che ti serve per crescere",
     body: ["Qua puoi trovare:"],
     bullets: [
-      {
-        name: "Biblioteca",
-        desc: "Articoli approfonditi per informarti e formarti su coscienza, biofisica, spiritualità, naturopatia, medicina integrata e molto altro.",
-      },
-      {
-        name: "Media",
-        desc: "Meditazioni — percorsi guidati per centrarti, ritrovare chiarezza e coltivare la tua evoluzione personale. Non solo rilassamento: uno strumento di presenza e consapevolezza.\nVideo informativi su vari argomenti.",
-      },
-      {
-        name: "Corsi",
-        desc: "Percorsi strutturati per formarti in profondità, al tuo ritmo.",
-      },
+      "Articoli per informarti.",
+      "Meditazioni per star bene.",
+      "Video per conoscere.",
+      "Corsi per formarti.",
     ],
     footer:
-      "Due livelli di accesso:\n\n• Base — aperto a tutti per iniziare, esplorare e costruire basi solide.\n• Premium — approfondimento qualificato per professionisti e per la tua evoluzione personale.\n\nLa libertà resta di tutti.",
+      "Due livelli di accesso all'App:\n\n• Prova gratuita — aperto a tutti per iniziare a esplorare e conoscere.\n• Abbonato — per chi sceglie di aderire con un piccolo contributo a tutti i contenuti base.\n\nLa libertà resta di tutti.",
     cta: "Avanti",
   },
   {
-    title: "Indipendenza. Crescita.\nSuccesso. Libertà.",
+    title: "Indipendenza. Crescita.\nSuccesso. Libertà",
     body: [
       "Conosci ciò che vuoi.",
       "Scegli con consapevolezza.",
       "Esprimiti in opportunità di scelta.",
       "Il tuo valore prende forma.",
-      "Scegli il tuo ritmo. Esplora liberamente.",
+      "Scegli il tuo ritmo.",
+      "Esplora liberamente.",
       "Consegui la tua volontà in realizzo.",
     ],
     footer:
