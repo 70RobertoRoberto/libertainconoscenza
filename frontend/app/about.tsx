@@ -1,12 +1,10 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Image } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
-import { Muted, Card } from "@/src/ui";
+import { Muted } from "@/src/ui";
 import { LOGO_URL } from "@/src/assets";
-
-const TELEGRAM_URL = "https://t.me/conoscenza_aperta";
 
 const ABOUT_INTRO = `Libertà in Conoscenza è un'App di informazione e formazione che riunisce varie discipline in un unico spazio. Nasce con uno scopo preciso: darti conoscenza che ti rende autonomo e indipendente, in virtù del percorso che scegli di fare.
 
@@ -115,10 +113,6 @@ export default function About() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
-  const openTelegram = async () => {
-    try { await Linking.openURL(TELEGRAM_URL); } catch {}
-  };
-
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
@@ -142,14 +136,12 @@ export default function About() {
       </View>
 
       <View style={styles.bannerWrap}>
-        <Pressable testID="open-telegram-banner" onPress={openTelegram} style={styles.bannerPress}>
-          <Image
-            source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}/api/files/about/banner-telegram-49ac997f.jpg` }}
-            style={styles.bannerImg}
-            resizeMode="cover"
-            accessibilityLabel="Conoscenza Aperta - Canale Telegram"
-          />
-        </Pressable>
+        <Image
+          source={{ uri: `${process.env.EXPO_PUBLIC_BACKEND_URL || ""}/api/files/about/esplora-e-conosci-banner.jpg` }}
+          style={styles.bannerImg}
+          resizeMode="cover"
+          accessibilityLabel="Esplora e conosci - Libertà in Conoscenza"
+        />
       </View>
 
       <View style={{ paddingHorizontal: spacing.xl }}>
@@ -275,7 +267,7 @@ const styles = StyleSheet.create({
   },
   bannerImg: {
     width: "100%",
-    aspectRatio: 3 / 2,   // matches the source banner ratio (approx.)
+    aspectRatio: 2 / 1,   // matches the new banner ratio (1280x640)
     backgroundColor: colors.surfaceSecondary,
   },
   body: {
