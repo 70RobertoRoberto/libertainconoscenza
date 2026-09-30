@@ -137,7 +137,7 @@ export default function About() {
 
       <View style={styles.heroWrap}>
         <Image source={{ uri: LOGO_URL }} style={styles.logo} resizeMode="contain" />
-        <Text style={styles.brand}>CONOSCENZA APERTA</Text>
+        <Text style={styles.brand}>LIBERTÀ IN CONOSCENZA</Text>
         <Muted style={styles.tagline}>Sapienza per crescere</Muted>
       </View>
 
@@ -222,16 +222,6 @@ export default function About() {
             </View>
           </View>
         ))}
-
-        <Card style={styles.tgCard}>
-          <Text style={styles.tgTitle}>📡  Unisciti al canale Telegram</Text>
-          <Muted style={{ marginTop: 4, marginBottom: spacing.md }}>
-            Contenuti esclusivi, eventi e aggiornamenti dal progetto Libertà in Conoscenza.
-          </Muted>
-          <Pressable testID="open-telegram" onPress={openTelegram} style={styles.tgBtn}>
-            <Text style={styles.tgBtnTxt}>Apri Telegram · @conoscenza_aperta</Text>
-          </Pressable>
-        </Card>
 
         <Text style={styles.thanks}>GRAZIE</Text>
       </View>
