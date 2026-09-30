@@ -8,42 +8,108 @@ import { LOGO_URL } from "@/src/assets";
 
 const TELEGRAM_URL = "https://t.me/conoscenza_aperta";
 
-const ABOUT_INTRO = `Il progetto di Libertà in Conoscenza è il nuovo Inizio in cui le nostre valorose conoscenze sono riposte in valenza di chi vuole aderire a un progetto di grande cambiamento in attivo, sia in virtù migliorativa della propria vita in ritrovo qualificato di Ben Essere e sia in qualità autentica di Conoscenza riposta in grande valore di apporto per Tutti.
+const ABOUT_INTRO = `Libertà in Conoscenza è un'App di informazione e formazione che riunisce varie discipline in un unico spazio. Nasce con uno scopo preciso: darti conoscenza che ti rende autonomo e indipendente, in virtù del percorso che scegli di fare.
 
-Il nostro obiettivo è perciò nobile e ideale, in ambito di valori da conseguire e apporre con considerazione unificata, ossia tutte le valenze di conoscenza sono qua ben amate, se portate con valore conseguito e condiviso e perciò in supporto di tutti per amore di anima e di anime e di virtù in vita da consigliare sempre per tutti quelli che vogliono trovare giovamento nel cambiamento in conoscenza di se stessi e in supporto per altri.
+È uno strumento ideale che ti consente di esplorare e scegliere con consapevolezza anche il tuo percorso personale. All'interno puoi, così, seguire la tua ispirazione e riportare in te conoscenza, in valore di crescita e di riconoscimento.`;
 
-La Conoscenza è pertanto Aperta in simbiosi di valore per tutti da conseguire in ogni forma che porta la qualifica in vita di un miglioramento da consolidare in nuove conoscenze e, pertanto, in grandi apporti di sviluppi in conoscenze di vario tipo, da riporre sempre in qualifica di grandi opportunità aggiuntive che tutti possono conseguire in forma gratuita, in quanto il nostro ideale è aggiornare sempre in considerazione di un progetto di amore di vita che è anche di ogni vita, in grande rilievo di valore da conseguite in Terra.
-
-La Conoscenza Aperta diviene così una grande opportunità per tutti per elevare le proprie coscienze ed essere in amore di verità libera e fruibile in alto livello di valori e anche strumento per il Ben Essere di ogni persona in una forma unificatoria in ogni livello di analisi.`;
-
-const ABOUT_QUOTE = `La Conoscenza Aperta è il ponte tra ciò che sei e ciò che puoi diventare.
-Non ti dice cosa pensare, ti insegna come ascoltare.
-Non ti promette la guarigione, ti offre gli strumenti per ritrovare la tua armonia, perché il Ben Essere non è una meta, ma un viaggio e in questo viaggio, ogni sapere è un gradino, ogni esperienza è una lezione, ogni incontro è un dono e ogni conoscenza è una virtù acquisita.
-Tutto questo può essere vissuto assieme, in supporto e Amore, perché è il viaggio della Vita che riguarda in Vita tutti in sintonia di Ben Essere!`;
-
-const ABOUT_IDEATORI = `Siamo un gruppo di Anime in ricerca di verità che si occupano da decenni di Conoscenza in differenti ambiti e che collaborano alla diffusione delle proprie conoscenze spesso, anche attraverso Convegni Nazionali o incontri dibattiti che proponiamo a tutti in vari parti di Italia, in condivisione di Centri che si aprono al nostro approccio di Conoscenza che è finalizzato al recupero del valore in vita della vita e pertanto del Ben Essere in verità di esperienza, da recuperare per Tutti in sintonia e in Conoscenza attiva e possibile in armonia di intenti.`;
-
-const ABOUT_CREDO = `Crediamo che il Ben Essere non sia un privilegio, ma un diritto di ogni essere umano e crediamo che la strada per raggiungerlo passi attraverso la Conoscenza Aperta: un sapere che non si chiude in steccati disciplinari ma che abbraccia la complessità della vita in risorse da conseguire in scambio di anima e di anime in valori autentici e qualificati di conoscenza.
-
-Qui non troverai dogmi né ricette magiche. Troverai strumenti, prospettive, storie, ricerche e pratiche che ti aiuteranno a:`;
-
-const ABOUT_LIST = [
-  "Comprendere il tuo corpo come un sistema vivo e informato.",
-  "Ascoltare la tua mente come una voce che merita attenzione.",
-  "Riconoscere il tuo spirito come una presenza che ti guida.",
-  "Costruire relazioni che nutrono e sostengono.",
-  "Vivere la vita in sacralità realizzativa.",
-  "Conoscere l'armonia del Sacro in virtù di Anima.",
-  "Conseguire saperi elevativi in Ben Essere.",
-  "Essere partecipe della tua esistenza in vita in grande modello esemplare di realizzo in correttezza e in virtù acquisite e conosciute.",
-  "Amare la vita in amabilità conseguita e riposta in alto.",
+const DISCIPLINE_LIST = [
+  "Fisica e Biofisica quantistica",
+  "Naturopatia",
+  "Psicologia",
+  "Coscienza",
+  "Neuroscienze",
+  "Cardioscienze",
+  "Medicina Integrata e Complementare",
+  "Filosofia",
+  "Crescita Personale e Spirituale",
+  "Discipline Bio Naturali",
+  "Arti Orientali",
+  "Esoterismo",
+  "Nutrizione",
+  "Meditazione",
+  "Pratiche Energetiche",
 ];
 
-const ABOUT_CLOSING = `Conoscere e amare è il dono di Anima e pertanto è Anima in dono per voi Tutti in Ben Essere in sintonia dell'Essere in Benevolenza acquisita e riuscita in espressione in Vita.
+const ACCESSO_APP = [
+  {
+    name: "Prova gratuita",
+    desc: "Aperta a tutti per iniziare a esplorare e conoscere. Senza spesa per 15 giorni con accesso a 5 corsi base da te scelti in preferenza, 10 meditazioni da te selezionate e tutti gli articoli e i video informativi.",
+  },
+  {
+    name: "Abbonato",
+    desc: "Per chi sceglie di aderire a tutti i contenuti base con un piccolo contributo di 12 euro annui (1 euro al mese). Con tale scelta è possibile usufruire di tutti i corsi a livello base e di tutte le meditazioni presenti, compresi tutti i video e articoli informativi.",
+  },
+];
 
-La Conoscenza Aperta è il nostro dono e il Ben-Essere è il tuo conseguito.
+const COSA_TROVI_INTRO = `L'App organizza i contenuti in tre forme, per accompagnarti in modo completo dalla comprensione, alla pratica e alla formazione strutturata.`;
 
-L'App ha anche un suo corrisposto in Telegram con il nome Conoscenza Aperta e con contenuti prevalentemente tutti differenti ed è conseguibile per tutti in approdo di articoli. È consigliato il vostro contributo in adesione nel nostro canale di divulgazione Telegram: in questo modo sarete sempre aggiornati su tutti gli eventi e le innovazioni in contributi vari e in differenti modalità.`;
+const COSA_TROVI_SEZIONI = [
+  {
+    icon: "📄",
+    title: "Biblioteca",
+    desc: "Contenuti scritti per informarti, aggiornarti e aprire la mente. Approfondimenti su tutte le discipline, dal livello divulgativo a quello specialistico. Tutto diviso in categorie ampie e specifiche.",
+  },
+  {
+    icon: "🧘",
+    title: "Media",
+    desc: "• Meditazioni: proposte per centrarti, ritrovare chiarezza e coltivare la tua evoluzione personale. Non solo rilassamento ma anche uno strumento di presenza e consapevolezza.\n• Video: presentazioni di tematiche e discipline spiegate in modo dettagliato e specifico.",
+  },
+  {
+    icon: "🎓",
+    title: "Corsi",
+    desc: "Corsi e percorsi formativi strutturati, con vari moduli differenziati, per formarti in virtù del tuo reale interesse, con possibilità di scelta differenziata e di approfondimento con metodo e continuità, non solo per curiosare, ma anche per padroneggiare.",
+  },
+];
+
+const LIVELLI_CORSI_INTRO = `L'App prevede due livelli per i corsi, pensati per accompagnarti in ogni fase del tuo percorso, che sono due gradi di interesse differenziati in approfondimento.`;
+
+const LIVELLI_CORSI = [
+  {
+    name: "Livello Base — aperto a tutti",
+    desc: "È la porta d'ingresso, libera e accessibile per usufruire di ogni corso istruito in forma più aperta e anche convenevole in ideale di tutti. Tutto per iniziare a esplorare, conoscere e costruire basi solide.",
+  },
+  {
+    name: "Livello Premium — approfondimento qualificato",
+    desc: "È lo spazio per chi vuole andare oltre, riscoprendo il valore dell'approfondimento di alcuni contenuti più specializzanti in un catalogo di corsi e percorsi avanzati, per chi desidera trasformare la conoscenza in valore integrato ed elevato.",
+  },
+];
+
+const LIVELLI_CORSI_QUOTE = `Il Base non è un livello inferiore: è la libertà di iniziare.
+Il Premium non è un livello superiore della persona: è la libertà di approfondire.
+La libertà resta di tutti.`;
+
+const GUIDA_INTRO = `Guida all'uso veloce dell'App per l'abbonato`;
+
+const GUIDA_STEPS = [
+  {
+    title: "Scegli la tua area",
+    desc: "Esplora per disciplina, per tema o per tipo di contenuto: articoli, meditazioni, video, corsi.",
+  },
+  {
+    title: "Segui il tuo ritmo",
+    desc: "Non ci sono percorsi obbligati. Puoi leggere, meditare, studiare — quando vuoi, quanto vuoi.",
+  },
+  {
+    title: "Costruisci il tuo percorso",
+    desc: "Scegli i contenuti che ti interessano, riprendi da dove avevi lasciato, continua liberamente il tuo cammino personale di crescita. Nel tuo profilo personale troverai le tue scelte e i tuoi contenuti.",
+  },
+  {
+    title: "Accedi a ciò che è di tuo interesse",
+    desc: "Inizi libero nel percorso base per poi proseguire nella scelta ideale che preferisci.",
+  },
+  {
+    title: "Come accedere al Servizio Premium",
+    desc: "Clicca sul corso che vuoi utilizzare e compila il form con i dati richiesti e procedi all'acquisto. Sarai attivato subito e riceverai una mail riepilogativa del servizio scelto che sarà disponibile per tutta la durata del tuo abbonamento.",
+  },
+  {
+    title: "Durata e scadenza",
+    desc: "L'abbonamento è annuale ed è rinnovato automaticamente. Sarai avvisato da una settimana prima e il giorno prima del rinnovo. Se vuoi procedere alla disdetta accedi al tuo profilo e disdici quando vuoi. Dopo aver disdetto, il tuo profilo con tutti i tuoi dati sarà attivo per altri sei mesi, in cui puoi ancora riattivarlo e recuperare il tuo conseguito, semplicemente rinnovando l'abbonamento. Dopo sei mesi dovrai ripartire con un nuovo profilo.",
+  },
+  {
+    title: "Approfondimenti",
+    desc: "Ulteriori approfondimenti sono disponibili nel tuo profilo personale in termini di servizio, privacy policy, cookie policy, disclaimer.",
+  },
+];
 
 export default function About() {
   const router = useRouter();
@@ -89,29 +155,73 @@ export default function About() {
       <View style={{ paddingHorizontal: spacing.xl }}>
         <Text style={styles.body}>{ABOUT_INTRO}</Text>
 
-        <View style={styles.quoteBox}>
-          <Text style={styles.quoteMark}>“</Text>
-          <Text style={styles.quoteText}>{ABOUT_QUOTE}</Text>
-          <Text style={[styles.quoteMark, styles.quoteMarkClose]}>”</Text>
-        </View>
-
-        <Text style={styles.sectionTitle}>IDEATORI</Text>
-        <Text style={styles.body}>{ABOUT_IDEATORI}</Text>
-
-        <View style={styles.quoteBox}>
-          <Text style={styles.quoteMark}>“</Text>
-          <Text style={styles.quoteText}>{ABOUT_CREDO}</Text>
-          <View style={{ height: spacing.md }} />
-          {ABOUT_LIST.map((item, i) => (
-            <View key={i} style={styles.listRow}>
-              <Text style={styles.bullet}>◆</Text>
-              <Text style={styles.listItem}>{item}</Text>
+        {/* Discipline presenti */}
+        <Text style={styles.sectionTitle}>DISCIPLINE PRESENTI</Text>
+        <View style={styles.chipsWrap}>
+          {DISCIPLINE_LIST.map((d, i) => (
+            <View key={i} style={styles.chip}>
+              <Text style={styles.chipTxt}>{d}</Text>
             </View>
           ))}
+        </View>
+
+        {/* Due livelli di accesso all'App */}
+        <Text style={styles.sectionTitle}>DUE LIVELLI DI ACCESSO ALL&apos;APP</Text>
+        {ACCESSO_APP.map((it, i) => (
+          <View key={i} style={styles.itemCard}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemBullet}>◆</Text>
+              <Text style={styles.itemName}>{it.name}</Text>
+            </View>
+            <Text style={styles.itemDesc}>{it.desc}</Text>
+          </View>
+        ))}
+
+        {/* Cosa trovi dentro */}
+        <Text style={styles.sectionTitle}>COSA TROVI DENTRO</Text>
+        <Text style={styles.body}>{COSA_TROVI_INTRO}</Text>
+        {COSA_TROVI_SEZIONI.map((s, i) => (
+          <View key={i} style={styles.itemCard}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemIcon}>{s.icon}</Text>
+              <Text style={styles.itemName}>{s.title}</Text>
+            </View>
+            <Text style={styles.itemDesc}>{s.desc}</Text>
+          </View>
+        ))}
+
+        {/* Come funziona: due livelli di accesso ai corsi */}
+        <Text style={styles.sectionTitle}>COME FUNZIONA — DUE LIVELLI DI ACCESSO</Text>
+        <Text style={styles.body}>{LIVELLI_CORSI_INTRO}</Text>
+        {LIVELLI_CORSI.map((l, i) => (
+          <View key={i} style={styles.itemCard}>
+            <View style={styles.itemHeader}>
+              <Text style={styles.itemBullet}>◆</Text>
+              <Text style={styles.itemName}>{l.name}</Text>
+            </View>
+            <Text style={styles.itemDesc}>{l.desc}</Text>
+          </View>
+        ))}
+
+        <View style={styles.quoteBox}>
+          <Text style={styles.quoteMark}>“</Text>
+          <Text style={styles.quoteText}>{LIVELLI_CORSI_QUOTE}</Text>
           <Text style={[styles.quoteMark, styles.quoteMarkClose]}>”</Text>
         </View>
 
-        <Text style={styles.body}>{ABOUT_CLOSING}</Text>
+        {/* Guida all'uso veloce */}
+        <Text style={styles.sectionTitle}>{GUIDA_INTRO.toUpperCase()}</Text>
+        {GUIDA_STEPS.map((s, i) => (
+          <View key={i} style={styles.stepRow}>
+            <View style={styles.stepNumberWrap}>
+              <Text style={styles.stepNumber}>{i + 1}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.stepTitle}>{s.title}</Text>
+              <Text style={styles.stepDesc}>{s.desc}</Text>
+            </View>
+          </View>
+        ))}
 
         <Card style={styles.tgCard}>
           <Text style={styles.tgTitle}>📡  Unisciti al canale Telegram</Text>
@@ -224,6 +334,102 @@ const styles = StyleSheet.create({
   listRow: { flexDirection: "row", alignItems: "flex-start", marginVertical: 5 },
   bullet: { color: colors.brandPrimary, marginRight: spacing.sm, fontSize: 12, marginTop: 4 },
   listItem: { flex: 1, color: colors.onSurface, fontSize: 14, lineHeight: 22, fontFamily: "Georgia" },
+
+  // Chip layout for "Discipline presenti"
+  chipsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  chipTxt: {
+    color: colors.onSurface,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+
+  // Card items with name + description
+  itemCard: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  itemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.xs,
+  },
+  itemBullet: {
+    color: colors.brandPrimary,
+    fontSize: 14,
+    marginRight: spacing.sm,
+  },
+  itemIcon: {
+    fontSize: 20,
+    marginRight: spacing.sm,
+  },
+  itemName: {
+    color: colors.brandPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    flex: 1,
+  },
+  itemDesc: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: "Georgia",
+  },
+
+  // Numbered guide steps
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing.lg,
+  },
+  stepNumberWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: spacing.md,
+    marginTop: 2,
+  },
+  stepNumber: {
+    color: colors.surface,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  stepTitle: {
+    color: colors.onSurface,
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  stepDesc: {
+    color: colors.onSurfaceSecondary,
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: "Georgia",
+  },
+
   tgCard: {
     marginTop: spacing.xxl,
     borderColor: colors.brandPrimary,
