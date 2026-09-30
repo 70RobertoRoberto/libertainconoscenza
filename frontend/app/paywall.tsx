@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { api, auth } from "@/src/api";
 import { GoldButton, Muted, Card } from "@/src/ui";
+import FabMenu from "@/src/FabMenu";
 
 type Plan = { key: string; months: number; days: number; price_eur: number; label: string };
 type Sub = { status?: string; days_remaining?: number | null; active?: boolean };
@@ -214,6 +215,7 @@ export default function Paywall() {
           loading={loading}
         />
       </View>
+      <FabMenu />
     </View>
   );
 }

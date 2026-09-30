@@ -17,6 +17,7 @@ import { api } from "@/src/api";
 import { Muted } from "@/src/ui";
 import { useLang } from "@/src/i18n";
 import { findVideoCategoryBySlug } from "@/src/videoCategories";
+import FabMenu from "@/src/FabMenu";
 
 export default function VideoCategoryScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -52,6 +53,7 @@ export default function VideoCategoryScreen() {
   const items = data?.items || [];
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxxl }}
@@ -151,6 +153,8 @@ export default function VideoCategoryScreen() {
         </View>
       )}
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

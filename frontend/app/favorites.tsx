@@ -8,6 +8,7 @@ import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang } from "@/src/i18n";
+import FabMenu from "@/src/FabMenu";
 
 export default function Favorites() {
   const router = useRouter();
@@ -71,6 +72,7 @@ export default function Favorites() {
           </>
         )}
       </ScrollView>
+      <FabMenu />
     </View>
   );
 }

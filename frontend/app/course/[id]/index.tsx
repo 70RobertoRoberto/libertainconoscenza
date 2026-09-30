@@ -11,6 +11,7 @@ import { api, auth } from "@/src/api";
 import { RichViewer } from "@/src/RichEditor";
 import GatedLanding from "@/src/GatedLanding";
 import ShareButton from "@/src/ShareButton";
+import FabMenu from "@/src/FabMenu";
 
 type CourseDetail = {
   course: {
@@ -123,6 +124,7 @@ export default function CourseDetailScreen() {
   const showPrice = discountedPrice.toFixed(2);
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
@@ -330,6 +332,8 @@ export default function CourseDetailScreen() {
         )}
       </View>
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

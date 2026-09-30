@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { Muted } from "@/src/ui";
 import { LOGO_URL } from "@/src/assets";
+import FabMenu from "@/src/FabMenu";
 
 const ABOUT_INTRO = `Libertà in Conoscenza è un'App di informazione e formazione che riunisce varie discipline in un unico spazio. Nasce con uno scopo preciso: darti conoscenza che ti rende autonomo e indipendente, in virtù del percorso che scegli di fare.
 
@@ -114,6 +115,7 @@ export default function About() {
   const insets = useSafeAreaInsets();
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{
@@ -218,6 +220,8 @@ export default function About() {
         <Text style={styles.thanks}>GRAZIE</Text>
       </View>
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

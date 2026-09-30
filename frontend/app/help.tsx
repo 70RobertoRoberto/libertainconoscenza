@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
+import FabMenu from "@/src/FabMenu";
 
 type Ticket = {
   id: string;
@@ -99,6 +100,7 @@ export default function HelpScreen() {
   };
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{
@@ -232,6 +234,8 @@ export default function HelpScreen() {
         )}
       </View>
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

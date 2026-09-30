@@ -17,6 +17,7 @@ import { api } from "@/src/api";
 import { CATEGORY_IMAGES, DEFAULT_IMAGE } from "@/src/assets";
 import { Muted } from "@/src/ui";
 import { useLang, catLabel } from "@/src/i18n";
+import FabMenu from "@/src/FabMenu";
 
 export default function LibraryCategory() {
   const { cat: catParam } = useLocalSearchParams<{ cat: string }>();
@@ -142,6 +143,7 @@ export default function LibraryCategory() {
           </Pressable>
         )}
       />
+      <FabMenu />
     </View>
   );
 }

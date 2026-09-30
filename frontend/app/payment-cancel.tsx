@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
+import FabMenu from "@/src/FabMenu";
 
 export default function PaymentCancelScreen() {
   const router = useRouter();
@@ -23,6 +24,7 @@ export default function PaymentCancelScreen() {
       <Pressable onPress={() => router.replace("/" as any)} style={[s.btn, s.btnGhost]}>
         <Text style={[s.btnTxt, s.btnGhostTxt]}>Torna alla home</Text>
       </Pressable>
+      <FabMenu />
     </View>
   );
 }

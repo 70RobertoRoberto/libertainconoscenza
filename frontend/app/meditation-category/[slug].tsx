@@ -17,6 +17,7 @@ import { api } from "@/src/api";
 import { Muted } from "@/src/ui";
 import { useLang } from "@/src/i18n";
 import { findCategoryBySlug } from "@/src/meditationCategories";
+import FabMenu from "@/src/FabMenu";
 
 export default function MeditationCategoryScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -52,6 +53,7 @@ export default function MeditationCategoryScreen() {
   const items = data?.items || [];
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{ paddingBottom: insets.bottom + spacing.xxxl }}
@@ -148,6 +150,8 @@ export default function MeditationCategoryScreen() {
         </View>
       )}
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

@@ -18,6 +18,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { Muted, GoldButton } from "@/src/ui";
 import { useLang } from "@/src/i18n";
+import FabMenu from "@/src/FabMenu";
 
 type MediaItem = {
   id: string;
@@ -274,6 +275,7 @@ export default function PlaylistDetailScreen() {
           </>
         )}
       </ScrollView>
+      <FabMenu />
     </View>
   );
 }

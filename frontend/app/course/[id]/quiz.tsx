@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
+import FabMenu from "@/src/FabMenu";
 
 type QuizView = {
   questions: { id: string; text: string; answers: { text: string }[] }[];
@@ -144,6 +145,7 @@ export default function CourseQuizScreen() {
   // ---- Result screen (post-submit) ----
   if (result) {
     return (
+      <>
       <ScrollView style={{ flex: 1, backgroundColor: colors.surface }} contentContainerStyle={{ padding: spacing.xl, paddingTop: insets.top + spacing.xl, paddingBottom: 40 }}>
         <View style={[s.resultBox, result.passed ? s.pass : s.fail]}>
           <Text style={s.resultBig}>{result.passed ? "🏆" : "😊"}</Text>
@@ -235,7 +237,15 @@ export default function CourseQuizScreen() {
         <Pressable onPress={() => router.replace(`/course/${id}` as any)} style={[s.btn, { marginTop: spacing.xl }]}>
           <Text style={s.btnTxt}>Torna al corso</Text>
         </Pressable>
+        <Pressable onPress={() => router.replace("/(tabs)/corsi" as any)} style={[s.btn, s.btnGhost, { marginTop: spacing.md }]}>
+          <Text style={s.btnGhostTxt}>🎓  Elenco corsi</Text>
+        </Pressable>
+        <Pressable onPress={() => router.replace("/(tabs)" as any)} style={[s.btn, s.btnGhost, { marginTop: spacing.sm }]}>
+          <Text style={s.btnGhostTxt}>🏠  Home</Text>
+        </Pressable>
       </ScrollView>
+      <FabMenu />
+      </>
     );
   }
 
@@ -335,6 +345,7 @@ export default function CourseQuizScreen() {
           </Pressable>
         </ScrollView>
       )}
+      <FabMenu />
     </View>
   );
 }

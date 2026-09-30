@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { Muted, GoldButton, Card } from "@/src/ui";
+import FabMenu from "@/src/FabMenu";
 
 type PlaylistRow = { id: string; name: string; count: number; updated_at?: string };
 
@@ -138,6 +139,7 @@ export default function PlaylistsScreen() {
           ))
         )}
       </ScrollView>
+      <FabMenu />
     </View>
   );
 }

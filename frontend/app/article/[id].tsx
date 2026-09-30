@@ -23,6 +23,7 @@ import { useLang, catLabel } from "@/src/i18n";
 import Markdown from "react-native-markdown-display";
 import GatedLanding from "@/src/GatedLanding";
 import ShareButton from "@/src/ShareButton";
+import FabMenu from "@/src/FabMenu";
 
 export default function ArticleDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -218,6 +219,7 @@ export default function ArticleDetail() {
           </Text>
         </Pressable>
       </View>
+      <FabMenu />
     </View>
   );
 }

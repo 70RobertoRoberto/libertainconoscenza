@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
+import FabMenu from "@/src/FabMenu";
 
 type EnrollmentItem = {
   course: {
@@ -46,6 +47,7 @@ export default function MyCoursesScreen() {
   const items = data?.items || [];
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{
@@ -143,6 +145,8 @@ export default function MyCoursesScreen() {
         </View>
       )}
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
+import FabMenu from "@/src/FabMenu";
 
 type CertItem = {
   id: string;
@@ -42,6 +43,7 @@ export default function MyCertificatesScreen() {
   const items = data?.items || [];
 
   return (
+    <>
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.surface }}
       contentContainerStyle={{
@@ -110,6 +112,8 @@ export default function MyCertificatesScreen() {
         </View>
       )}
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

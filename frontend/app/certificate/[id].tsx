@@ -7,6 +7,7 @@ import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { LOGO_URL } from "@/src/assets";
 import { RichViewer } from "@/src/RichEditor";
+import FabMenu from "@/src/FabMenu";
 
 type Cert = {
   id: string;
@@ -94,10 +95,20 @@ export default function CertificateScreen() {
         <Pressable onPress={onPrint} style={styles.printBtn}>
           <Text style={styles.printTxt}>📄  Salva / Stampa PDF</Text>
         </Pressable>
+        <Pressable onPress={() => router.replace("/(tabs)/corsi" as any)} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryTxt}>🎓  Elenco corsi</Text>
+        </Pressable>
+        <Pressable onPress={() => router.replace("/my-certificates" as any)} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryTxt}>📜  I miei certificati</Text>
+        </Pressable>
+        <Pressable onPress={() => router.replace("/(tabs)" as any)} style={styles.secondaryBtn}>
+          <Text style={styles.secondaryTxt}>🏠  Home</Text>
+        </Pressable>
         <Text style={styles.note}>
           Template provvisorio. Verrà sostituito dal certificato ufficiale &quot;Libertà in Conoscenza&quot; quando disponibile.
         </Text>
       </ScrollView>
+      <FabMenu />
     </View>
   );
 }
@@ -169,5 +180,15 @@ const styles = StyleSheet.create({
   metaValue: { color: colors.onSurface, fontSize: 15, fontWeight: "700" },
   printBtn: { backgroundColor: colors.brandPrimary, paddingVertical: 14, borderRadius: radius.md, alignItems: "center", marginTop: spacing.lg },
   printTxt: { color: colors.onBrandPrimary, fontWeight: "800" },
+  secondaryBtn: {
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    alignItems: "center",
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.brandPrimary,
+    backgroundColor: colors.surfaceSecondary,
+  },
+  secondaryTxt: { color: colors.brandPrimary, fontWeight: "700", fontSize: 14 },
   note: { color: colors.muted, fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 12 },
 });

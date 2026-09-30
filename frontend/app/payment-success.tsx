@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
+import FabMenu from "@/src/FabMenu";
 
 type SessionStatus = {
   session_id: string;
@@ -107,6 +108,7 @@ export default function PaymentSuccessScreen() {
   // success
   const isCourse = data?.kind === "course";
   return (
+    <>
     <ScrollView contentContainerStyle={[s.container, { paddingTop: insets.top }]}>
       <Text style={s.emoji}>🎉</Text>
       <Text style={s.title}>
@@ -127,6 +129,8 @@ export default function PaymentSuccessScreen() {
       </Pressable>
       <Text style={s.smallHint}>Riceverai una ricevuta via email a breve.</Text>
     </ScrollView>
+    <FabMenu />
+    </>
   );
 }
 

@@ -21,6 +21,7 @@ import { useLang, catLabel } from "@/src/i18n";
 import AddToPlaylistModal from "@/src/AddToPlaylistModal";
 import GatedLanding from "@/src/GatedLanding";
 import ShareButton from "@/src/ShareButton";
+import FabMenu from "@/src/FabMenu";
 
 export default function MediaDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -180,6 +181,7 @@ export default function MediaDetail() {
         mediaId={id as string}
         mediaTitle={data.title}
       />
+      <FabMenu />
     </View>
   );
 }

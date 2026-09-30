@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { colors, spacing, radius } from "@/src/theme";
 import { api } from "@/src/api";
 import { RichViewer } from "@/src/RichEditor";
+import FabMenu from "@/src/FabMenu";
 
 type Topic = {
   id: string; title: string; kind: string; content_html: string; order: number;
@@ -133,6 +134,7 @@ export default function CourseReadScreen() {
           </Pressable>
         )}
       </View>
+      <FabMenu />
     </View>
   );
 }
